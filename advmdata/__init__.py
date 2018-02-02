@@ -10,7 +10,7 @@ class ADVMError(Exception):
     pass
 
 
-class ADVMDataIncompatibleError(AcousticException):
+class ADVMDataIncompatibleError(ADVMError):
     """An error if ADVMData instances are incompatible"""
     pass
 
@@ -113,72 +113,6 @@ class ADVMParam(abc.ABC):
             self._dict[key] = value
 
 
-class ADVMProcParam(ADVMParam):
-    """Stores ADVM Processing parameters."""
-
-    def __init__(self, num_cells):
-        """
-
-        :param num_cells: Number of cells reported by the ADVM configuration parameters
-
-        Note: The number of cells is required because it is used for a boundary check
-            when setting the 'Minimum Number of Cells' value.
-        """
-
-        self._number_of_cells = num_cells
-        proc_dict = {
-            "Beam": 1,
-            # "Moving Average Span": 1,
-            "Backscatter Values": "SNR",
-            "Intensity Scale Factor": 0.43,
-            "Minimum Cell Mid-Point Distance": -np.inf,
-            "Maximum Cell Mid-Point Distance": np.inf,
-            "Minimum Number of Cells": 2,
-            "Minimum Vbeam": -np.inf,
-            "Near Field Correction": True,
-            "WCB Profile Adjustment": True
-        }
-
-        super().__init__(proc_dict)
-
-    def _check_value(self, key, value):
-        """
-        Check if the value provided is valid. Raise an exception if not.
-
-        :param key: User-provided processing dictionary key
-        :param value: User-provided processing dictionary value
-        :return: Nothing
-        """
-
-        self._check_key(key)
-
-        if key == "Beam" and (value in range(1, 3) or value == 'Avg'):
-            return
-        elif key == "Moving Average Span" and (0 <= value <= 1):
-            return
-        elif key == "Backscatter Values" and (value == "SNR" or value == "Amp"):
-            return
-        elif key == "Intensity Scale Factor" and 0 < value:
-            return
-        elif key == "Minimum Cell Mid-Point Distance":
-            np.float(value)
-            return
-        elif key == "Maximum Cell Mid-Point Distance":
-            np.float(value)
-            return
-        elif key == "Minimum Number of Cells" and (1 <= value <= self._number_of_cells):
-            return
-        elif key == "Minimum Vbeam":
-            np.float(value)
-            return
-        elif key == "Near Field Correction" and isinstance(value, bool):
-            return
-        elif key == "WCB Profile Adjustment" and isinstance(value, bool):
-            return
-        else:
-            raise ValueError(value)
-
-
 class ADVMConfigParam(ADVMParam):
     """Stores ADVM Configuration parameters."""
 
@@ -275,34 +209,9 @@ class ADVMData:
             setattr(result, k, copy.deepcopy(v, memo))
         return result
 
-    @staticmethod
-    def _calc_speed_of_sound(temperature):
-        """Calculate the speed of sound in water (in meters per second) based on Marczak, 1997
-
-        :param temperature: Array of temperature values, in degrees Celsius
-        :return: speed_of_sound: Speed of sound in meters per second
-        """
-
-        speed_of_sound = 1.402385 * 10 ** 3 + 5.038813 * temperature - \
-                         (5.799136 * 10 ** -2) * temperature ** 2 + \
-                         (3.287156 * 10 ** -4) * temperature ** 3 - \
-                         (1.398845 * 10 ** -6) * temperature ** 4 + \
-                         (2.787860 * 10 ** -9) * temperature ** 5
-
-        return speed_of_sound
-
-    @staticmethod
-    def _calc_wavelength(speed_of_sound, frequency):
-        """Calculate the wavelength of an acoustic signal.
-
-        :param speed_of_sound: Array containing the speed of sound in meters per second
-        :param frequency: Scalar containing acoustic frequency in kHz
-        :return:
-        """
-
-        wavelength = speed_of_sound / (frequency * 1e3)
-
-        return wavelength
+    @abc.abstractmethod
+    def _calc_cell_range(self):
+        pass
 
     def _create_origin_from_data_frame(self, acoustic_df, data_origin=None):
 
@@ -347,6 +256,14 @@ class ADVMData:
         combined_data_manager = self._data_manager.add_data(other_data_manager, keep_curr_obs=keep_curr_obs)
 
         return type(self)(combined_data_manager, self._configuration_parameters)
+
+    def get_cell_range(self):
+        """Get a DataFrame containing the range of cells along a single beam.
+
+        :return: Range of cells along a single beam
+        """
+
+        return self._calc_cell_range()
 
     def get_configuration_parameters(self):
         """
