@@ -2,6 +2,8 @@ import abc
 import copy
 import re
 
+import numpy as np
+
 from linearmodel import datamanager
 
 
@@ -212,23 +214,6 @@ class ADVMData:
     @abc.abstractmethod
     def _calc_cell_range(self):
         pass
-
-    def _create_origin_from_data_frame(self, acoustic_df, data_origin=None):
-
-        if data_origin is None:
-            data_origin = self._data_manager.get_origin()
-
-        data_sources = set(data_origin['origin'])
-
-        new_data_origin = pd.DataFrame(columns=['variable', 'origin'])
-
-        for source in data_sources:
-            tmp_origin = datamanager.DataManager.create_data_origin(acoustic_df, source)
-            new_data_origin = new_data_origin.append(tmp_origin)
-
-        new_data_origin.reset_index(drop=True, inplace=True)
-
-        return new_data_origin
 
     def add_data(self, other, keep_curr_obs=None):
         """Adds other ADVMData instance to self.
