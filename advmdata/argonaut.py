@@ -9,6 +9,35 @@ from linearmodel import datamanager
 class ArgonautADVMData(ADVMData):
     """Instrument-specific data for the SonTek Argonaut SL (second generation SL)"""
 
+    def _calc_cell_range(self):
+        """Calculate range of cells along a single beam.
+
+        :return: Range of cells along a single beam
+        """
+
+        acoustic_data = self._data_manager.get_data()
+
+        blanking_distance = self._configuration_parameters['Blanking Distance']
+        cell_size = self._configuration_parameters['Cell Size']
+        number_of_cells = self._configuration_parameters['Number of Cells']
+
+        first_cell_mid_point = blanking_distance + cell_size / 2
+        last_cell_mid_point = first_cell_mid_point + (number_of_cells - 1) * cell_size
+
+        slant_angle = self._configuration_parameters['Slant Angle']
+
+        cell_range = np.linspace(first_cell_mid_point,
+                                 last_cell_mid_point,
+                                 num=number_of_cells) / np.cos(np.radians(slant_angle))
+
+        cell_range = np.tile(cell_range, (acoustic_data.shape[0], 1))
+
+        col_names = ['R{:03}'.format(cell) for cell in range(1, number_of_cells+1)]
+
+        cell_range_df = pd.DataFrame(data=cell_range, index=acoustic_data.index, columns=col_names)
+
+        return cell_range_df
+
     @staticmethod
     def _read_argonaut_ctl_file(arg_ctl_filepath):
         """
