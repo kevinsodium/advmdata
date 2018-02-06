@@ -25,11 +25,7 @@ class ArgonautADVMData(ADVMData):
         first_cell_mid_point = blanking_distance + cell_size / 2
         last_cell_mid_point = first_cell_mid_point + (number_of_cells - 1) * cell_size
 
-        slant_angle = self._configuration_parameters['Slant Angle']
-
-        cell_range = np.linspace(first_cell_mid_point,
-                                 last_cell_mid_point,
-                                 num=number_of_cells) / np.cos(np.radians(slant_angle))
+        cell_range = np.linspace(first_cell_mid_point, last_cell_mid_point, num=number_of_cells)
 
         cell_range = np.tile(cell_range, (acoustic_data.shape[0], 1))
 
