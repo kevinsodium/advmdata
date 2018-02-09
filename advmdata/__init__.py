@@ -238,7 +238,7 @@ class ADVMData:
 
         other_data_manager = datamanager.DataManager(other_data, other_origin)
 
-        combined_data_manager = self._data_manager.add_data(other_data_manager, keep_curr_obs=keep_curr_obs)
+        combined_data_manager = self._data_manager.add_data_manager(other_data_manager, keep_curr_obs=keep_curr_obs)
 
         return type(self)(combined_data_manager, self._configuration_parameters)
 
