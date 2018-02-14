@@ -3,7 +3,7 @@ import numpy as np
 import os
 import pandas as pd
 
-from advmdata import ADVMData, ADVMConfigParam
+from advmdata.core import ADVMData, ADVMConfigParam
 from linearmodel import datamanager
 
 
