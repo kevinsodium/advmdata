@@ -124,7 +124,7 @@ class ADVMConfigParam(ADVMParam):
 
         # the valid for accessing information in the configuration parameters
         valid_keys = ['Frequency', 'Effective Transducer Diameter', 'Beam Orientation', 'Slant Angle',
-                      'Blanking Distance', 'Cell Size', 'Number of Cells', 'Number of Beams']
+                      'Blanking Distance', 'Cell Size', 'Number of Cells', 'Number of Beams', 'Instrument']
 
         # initial values for the configuration parameters
         init_values = np.tile(np.nan, (len(valid_keys),))
@@ -164,6 +164,9 @@ class ADVMConfigParam(ADVMParam):
         other_keys = ['Frequency', 'Effective Transducer Diameter', 'Slant Angle', 'Blanking Distance', 'Cell Size']
 
         if key == "Beam Orientation" and (value == "Horizontal" or value == "Vertical"):
+            return
+        # TODO: Determine valid  values for the instrument key
+        elif key == "Instrument":
             return
         elif key == "Number of Cells" and (1 <= value and isinstance(value, int)):
             return
