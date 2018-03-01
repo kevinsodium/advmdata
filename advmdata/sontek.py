@@ -265,6 +265,7 @@ class SL3GADVMData(ADVMData):
 
         # Read Cell Size in as CM, return M
         cell_size = mat_file['System_IqSetup'][0, 0]['advancedSetup']['SLcellSize']
+        # TODO: Check the units to see if we need to convert to meters
         if cell_size > 100:
             cell_size = cell_size/100
         config_dict['Cell Size'] = float(cell_size[0])
