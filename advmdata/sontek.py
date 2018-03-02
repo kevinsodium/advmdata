@@ -3,10 +3,13 @@ import pandas as pd
 import scipy
 from datetime import datetime
 from datetime import timedelta
+import linecache
+
 from scipy import io
 
-from advmdata.core import ADVMData, ADVMConfigParam
 from linearmodel import datamanager
+
+from advmdata.core import ADVMData, ADVMConfigParam
 
 
 class ArgonautADVMData(ADVMData):
@@ -18,8 +21,6 @@ class ArgonautADVMData(ADVMData):
         :return: Range of cells along a single beam
         """
 
-        acoustic_data = self._data_manager.get_data()
-
         blanking_distance = self._configuration_parameters['Blanking Distance']
         cell_size = self._configuration_parameters['Cell Size']
         number_of_cells = self._configuration_parameters['Number of Cells']
@@ -29,6 +30,7 @@ class ArgonautADVMData(ADVMData):
 
         cell_range = np.linspace(first_cell_mid_point, last_cell_mid_point, num=number_of_cells)
 
+        acoustic_data = self._data_manager.get_data()
         cell_range = np.tile(cell_range, (acoustic_data.shape[0], 1))
 
         col_names = ['R{:03}'.format(cell) for cell in range(1, number_of_cells+1)]
@@ -54,8 +56,10 @@ class ArgonautADVMData(ADVMData):
 
         if arg_type == "SL":
             config_dict['Beam Orientation'] = "Horizontal"
+            config_dict['Instrument'] = 'SL'
         else:
             config_dict['Beam Orientation'] = "Vertical"
+            config_dict['Instrument'] = 'SW'
 
         line = linecache.getline(arg_ctl_filepath, 12).strip()
         frequency = line.split("Frequency ------- (kHz) --- ")[-1:]
