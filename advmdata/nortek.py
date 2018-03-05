@@ -144,8 +144,9 @@ class AquadoppADVMData(ADVMData):
         frequency = float(_get_re_value(frequency_pattern, hdr_text))
 
         keys = ['Frequency', 'Beam Orientation', 'Slant Angle', 'Blanking Distance', 'Cell Size', 'Number of Cells',
-                'Number of Beams', 'Instrument']
-        values = [frequency, 'Horizontal', 25., blanking_distance, cell_size, number_of_cells, number_of_beams, 'AQD']
+                'Number of Beams', 'Instrument', 'Effective Transducer Diameter']
+        values = [frequency, 'Horizontal', 25., blanking_distance, cell_size, number_of_cells,
+                  number_of_beams, 'AQD', 0.01395]
         config_dict = dict(zip(keys, values))
 
         configuration_parameters = ADVMConfigParam()
