@@ -44,10 +44,10 @@ class AquadoppADVMData(ADVMData):
         return cell_range_df
 
     @classmethod
-    def _get_whd_header_names(cls, hdr_file_path, whd_file_path):
+    def _get_header_names_from_hdr(cls, hdr_file_path, data_file_path):
 
         # get the name of the whd file
-        _, whd_file_name = os.path.split(whd_file_path)
+        _, data_file_name = os.path.split(data_file_path)
 
         # read the hdf_file
         with open(hdr_file_path, 'r') as f:
@@ -55,34 +55,34 @@ class AquadoppADVMData(ADVMData):
 
         # find the whd section and read append the lines
         hdr_iter = iter(hdr_lines)
-        whd_headers = []
+        header_names = []
         try:
             while True:
                 line = next(hdr_iter)
-                if whd_file_name in line:
+                if data_file_name in line:
                     line = next(hdr_iter)
                     while line != '\n':
-                        whd_headers.append(line.strip())
+                        header_names.append(line.strip())
                         line = next(hdr_iter)
         except StopIteration:
             pass
 
         # get the header names
-        for i in range(len(whd_headers)):
-            split_line = whd_headers[i].split()
+        for i in range(len(header_names)):
+            split_line = header_names[i].split()
             # set the temperature to the standard header
-            if 'Temperature' in whd_headers[i]:
-                whd_headers[i] = 'Temp'
+            if 'Temperature' in header_names[i]:
+                header_names[i] = 'Temp'
             # set the noise to the standard header
-            elif 'Noise amplitude beam' in whd_headers[i]:
-                beam_number = _get_re_value('Noise amplitude beam ([0-9])', whd_headers[i])
-                whd_headers[i] = 'Noise' + beam_number
-            elif '(' in whd_headers[i]:
-                whd_headers[i] = ' '.join(split_line[1:-1])
+            elif 'Noise amplitude beam' in header_names[i]:
+                beam_number = _get_re_value('Noise amplitude beam ([0-9])', header_names[i])
+                header_names[i] = 'Noise' + beam_number
+            elif '(' in header_names[i]:
+                header_names[i] = ' '.join(split_line[1:-1])
             else:
-                whd_headers[i] = ' '.join(split_line[1:])
+                header_names[i] = ' '.join(split_line[1:])
 
-        return whd_headers
+        return header_names
 
     @staticmethod
     def _read_a(data_set_path, number_of_cells, beam_number):
@@ -155,27 +155,28 @@ class AquadoppADVMData(ADVMData):
         return configuration_parameters
 
     @classmethod
-    def _read_whd(cls, data_set_path):
-        """Read the WHD file into a DataFrame
+    def _read_time_series_file(cls, data_set_path, data_file_suffix):
+        """Read a time series file into a DataFrame
 
         :param data_set_path:
+        :param data_file_suffix:
         :return:
         """
 
         hdr_file_path = data_set_path + '.hdr'
-        whd_file_path = data_set_path + '.whd'
+        data_file_path = data_set_path + data_file_suffix
 
-        whd_header_names = cls._get_whd_header_names(hdr_file_path, whd_file_path)
+        header_names = cls._get_header_names_from_hdr(hdr_file_path, data_file_path)
 
-        whd_df = pd.read_table(whd_file_path, header=None, names=whd_header_names, sep='\s+')
+        data_file_df = pd.read_table(data_file_path, header=None, names=header_names, sep='\s+')
 
         date_time_columns = ['Month', 'Day', 'Year', 'Hour', 'Minute', 'Second']
-        datetime_index = pd.to_datetime(whd_df[date_time_columns])
+        datetime_index = pd.to_datetime(data_file_df[date_time_columns])
 
-        whd_df.set_index(datetime_index, inplace=True)
-        whd_df.drop(date_time_columns, axis=1, inplace=True)
+        data_file_df.set_index(datetime_index, inplace=True)
+        data_file_df.drop(date_time_columns, axis=1, inplace=True)
 
-        return whd_df
+        return data_file_df
 
     @classmethod
     def read_aquadopp_data(cls, data_path, data_set):
@@ -189,10 +190,20 @@ class AquadoppADVMData(ADVMData):
         data_set_path = os.path.join(data_path, data_set)
 
         configuration_parameters = cls._read_hdr(data_set_path)
-        whd_df = cls._read_whd(data_set_path)
+
+        sen_df = cls._read_time_series_file(data_set_path, '.sen')
+
+        whd_df = cls._read_time_series_file(data_set_path, '.whd')
+        whd_df_original_index = whd_df.index
+        whd_df = whd_df.append(pd.DataFrame(index=sen_df.index))
+        whd_df.sort_index(inplace=True)
+        whd_df.interpolate(inplace=True)
+        whd_df.drop(labels=whd_df_original_index, axis=0, inplace=True)
+        whd_df.drop(labels=['Temp'], axis=1, inplace=True)
+
         backscatter_df = cls._read_backscatter(data_set_path, configuration_parameters)
-        backscatter_df.set_index(whd_df.index, inplace=True)
-        advm_data_df = pd.concat([whd_df, backscatter_df], axis=1)
+        backscatter_df.set_index(sen_df.index, inplace=True)
+        advm_data_df = pd.concat([sen_df, whd_df, backscatter_df], axis=1)
 
         advm_data_origin = DataManager.create_data_origin(advm_data_df, data_set_path + "(AQD)")
         advm_data_manager = DataManager(advm_data_df, advm_data_origin)
