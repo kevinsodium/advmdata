@@ -9,9 +9,9 @@ import linecache
 
 from scipy import io
 
-from linearmodel import datamanager
+from linearmodel.linearmodel import datamanager
 
-from advmdata.core import ADVMData, ADVMConfigParam
+from advmdata.advmdata.core import ADVMData, ADVMConfigParam
 
 
 class ArgonautADVMData(ADVMData):
@@ -218,16 +218,18 @@ class SL3GADVMData(ADVMData):
         number_of_cells = self._configuration_parameters['Number of Cells']
 
         # 3G is blanking distance + 1.5* cell size
-        first_cell_midpoint = blanking_distance + 1.5*cell_size
-        last_cell_mid_point = first_cell_midpoint + (number_of_cells - 1)*cell_size
+        first_cell_midpoint = blanking_distance + 1.5 * cell_size
+        last_cell_mid_point = first_cell_midpoint + (number_of_cells - 1) * cell_size
 
         # defines linspace
-        cell_range = np.linspace(first_cell_midpoint, last_cell_mid_point, num = number_of_cells)
+        cell_range = np.linspace(first_cell_midpoint, last_cell_mid_point, num=number_of_cells)
         cell_range = np.tile(cell_range, (acoustic_data.shape[0], 1))
 
         col_names = ['R{:03}'.format(cell) for cell in range(1, number_of_cells + 1)]
-        cell_range_df = pd.DataFrame(data=cell_range, index=acoustic_data.index, columns =col_names)
+        cell_range_df = pd.DataFrame(data=cell_range, index=acoustic_data.index, columns=col_names)
 
+        print(cell_range_df)
+        print("cell range")
         return cell_range_df
 
     @staticmethod
@@ -273,7 +275,7 @@ class SL3GADVMData(ADVMData):
         cell_size = mat_file['System_IqSetup'][0, 0]['advancedSetup']['SLcellSize']
         # TODO: Check the units to see if we need to convert to meters
         if cell_size > 100:
-            cell_size = cell_size/100
+            cell_size = cell_size / 100
         config_dict['Cell Size'] = float(cell_size[0])
 
         # Number of Cells
@@ -282,6 +284,25 @@ class SL3GADVMData(ADVMData):
 
         # Return created configuration dictionary
         return config_dict
+
+    @staticmethod
+    def _read_date_time(sontek_file_path):
+        """
+
+        :param sontek_file_path: file path containing mat file
+        :return: sample times in a DataFrame datetime index
+        """
+        mat_file = scipy.io.loadmat(sontek_file_path, struct_as_record=True, squeeze_me=False)
+
+        # Load in Sample Times
+        sample_time = mat_file['FlowData_SampleTime']
+        sample_time = sample_time.flatten()
+
+        # Convert Sample times to date time index
+        sample_times = [datetime(2000, 1, 1, 0, 0) + timedelta(microseconds=x) for x in sample_time]
+        datetime_index = pd.to_datetime(sample_times)
+
+        return datetime_index
 
     @staticmethod
     def _read_mat_file_dat(sontek_file_path):
@@ -294,18 +315,6 @@ class SL3GADVMData(ADVMData):
         # Load .mat file into a variable
         mat_file = scipy.io.loadmat(sontek_file_path, struct_as_record=True, squeeze_me=False)
 
-        # Read sample time in as Serial Number (in microseconds from Jan 1st, 2000) and give it a timestamp
-        sample_time = mat_file['FlowData_SampleTime']
-        sample_time = sample_time.flatten()
-        sample_times = [datetime(2000, 1, 1, 0, 0) + timedelta(microseconds=x) for x in sample_time]
-
-        # Set index as the timestamp
-        datetime_index = pd.to_datetime(sample_times)
-
-        # Read in sample number total
-        sample_number = mat_file['FlowData_SampleNumber']
-        sample_number = sample_number.flatten()
-
         # Read in temperature
         temperature = mat_file['FlowData_Temp']
         temperature = temperature.flatten()
@@ -315,8 +324,7 @@ class SL3GADVMData(ADVMData):
         v_beam = v_beam.flatten()
 
         # Create a DataFrame from variables above with 'index=timestamp'
-        dat_df = pd.DataFrame({'Temp': temperature, 'Vertical Beam': v_beam}, index=sample_number)
-        dat_df.set_index(datetime_index, inplace=True)
+        dat_df = pd.DataFrame({'Temp': temperature, 'Vertical Beam': v_beam})
 
         return dat_df
 
@@ -366,6 +374,7 @@ class SL3GADVMData(ADVMData):
         dat_df = cls._read_mat_file_dat(mat_file_path)
         snr_df = cls._read_sontek_snr(mat_file_path)
         config_dict = cls._read_mat_file_param(mat_file_path)
+        datetime_index = cls._read_date_time(mat_file_path)
 
         # Read specific configuration values from '.mat' file
         configuration_parameters = ADVMConfigParam()
@@ -373,8 +382,13 @@ class SL3GADVMData(ADVMData):
 
         # Combine both DataFrames
         acoustic_df = pd.concat([dat_df, snr_df], axis=1)
-        data_origin = datamanager.DataManager.create_data_origin(acoustic_df, dataset_path + "(Sontek")
+
+        # Set Index to Date Time Index
+        acoustic_df = acoustic_df.set_index(datetime_index)
+
+        data_origin = datamanager.DataManager.create_data_origin(acoustic_df, mat_file_path + "(Sontek")
 
         data_manager = datamanager.DataManager(acoustic_df, data_origin)
 
         return cls(data_manager, configuration_parameters)
+
