@@ -9,9 +9,9 @@ import linecache
 
 from scipy import io
 
-from linearmodel.linearmodel import datamanager
+from linearmodel import datamanager
 
-from advmdata.advmdata.core import ADVMData, ADVMConfigParam
+from advmdata.core import ADVMData, ADVMConfigParam
 
 
 class ArgonautADVMData(ADVMData):
