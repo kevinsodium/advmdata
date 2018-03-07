@@ -9,9 +9,9 @@ import linecache
 
 from scipy import io
 
-from linearmodel import datamanager
+from linearmodel.linearmodel import datamanager
 
-from advmdata.core import ADVMData, ADVMConfigParam
+from advmdata.advmdata.core import ADVMData, ADVMConfigParam
 
 
 class ArgonautADVMData(ADVMData):
@@ -228,8 +228,6 @@ class SL3GADVMData(ADVMData):
         col_names = ['R{:03}'.format(cell) for cell in range(1, number_of_cells + 1)]
         cell_range_df = pd.DataFrame(data=cell_range, index=acoustic_data.index, columns=col_names)
 
-        print(cell_range_df)
-        print("cell range")
         return cell_range_df
 
     @staticmethod
@@ -247,6 +245,7 @@ class SL3GADVMData(ADVMData):
 
         # Determine the instrument type
         instrument_type = mat_file['System_Id'][0, 0]['InstrumentType']
+
         if 'IQ' in instrument_type[0]:
             config_dict['Instrument'] = "IQ"
         else:
@@ -343,6 +342,9 @@ class SL3GADVMData(ADVMData):
         # Intensity factor not yet give
         intensity_factor = np.NaN
 
+        number_cells = mat_file['System_IqSetup'][0, 0]['advancedSetup']['SLcellCount']
+        number_cells = int(number_cells[0])
+
         # Beam one SNR data
         beam_one_amp = mat_file['Profile_0_Amp']
         beam_snr = mat_file['FlowData_SNR']
@@ -355,7 +357,11 @@ class SL3GADVMData(ADVMData):
 
         # Create DataFrames for both beams and merge them
         snr_df1 = pd.DataFrame(beam_one_snr)
+        snr_df1 = snr_df1.rename(columns=lambda x: 'Cell[' + str(x).zfill(2) + ']Amp[1]')
+
         snr_df2 = pd.DataFrame(beam_two_snr)
+        snr_df2 = snr_df2.rename(columns=lambda x: 'Cell[' + str(x).zfill(2) + ']Amp[2]')
+
         snr_df = pd.concat([snr_df1, snr_df2], axis=1)
 
         return snr_df
