@@ -50,6 +50,9 @@ class ArgonautADVMData(ADVMData):
         :return: Dictionary containing specific configuration parameters
         """
 
+        if not os.path.isfile(arg_ctl_filepath):
+            raise FileNotFoundError('{0} does not exist'.format(arg_ctl_filepath))
+
         # Read specific configuration values from the Argonaut '.ctl' file into a dictionary.
         # The fixed formatting of the '.ctl' file is leveraged to extract values from foreknown file lines.
         config_dict = {}
@@ -118,7 +121,7 @@ class ArgonautADVMData(ADVMData):
         dat_df.set_index(datetime_index, inplace=True)
 
         # remove non-relevant columns
-        relevant_columns = ['Temp', 'Vbeam']
+        relevant_columns = ['Temp', 'Vbeam', 'Velocity(X|Y)']
         dat_df = dat_df.filter(regex=r'(' + '|'.join(relevant_columns) + r')$')
 
         dat_df = dat_df.apply(pd.to_numeric, args=('coerce', ))
@@ -127,12 +130,13 @@ class ArgonautADVMData(ADVMData):
         return dat_df
 
     @staticmethod
-    def _read_argonaut_snr_file(arg_snr_filepath):
+    def _read_argonaut_multicell_file(arg_snr_filepath, column_regex=None):
         """
-        Read the Argonaut '.dat' file into a DataFrame.
+        Read Argonaut multi-cell files (vel & snr) into a DataFrame.
 
-        :param arg_snr_filepath: Filepath containing the Argonaut '.dat' file
-        :return: Timestamp formatted DataFrame containing '.snr' file contents
+        :param arg_snr_filepath: Filepath containing the Argonaut '.snr' or '.vel' file
+        :param column_regex: Regular expression for relevant columns
+        :return: Timestamp formatted DataFrame containing '.snr' or '.vel' file contents
         """
 
         # Read the Argonaut '.snr' file into a DataFrame, combine first two rows to make column headers,
@@ -157,7 +161,8 @@ class ArgonautADVMData(ADVMData):
         snr_df.set_index(datetime_index, inplace=True)
 
         # remove non-relevant columns
-        snr_df = snr_df.filter(regex=r'(^Cell\d{2}(Amp|SNR)\d{1})$')
+        if column_regex is not None:
+            snr_df = snr_df.filter(regex=column_regex)
 
         snr_df = snr_df.apply(pd.to_numeric, args=('coerce', ))
         snr_df = snr_df.astype(np.float)
@@ -185,17 +190,30 @@ class ArgonautADVMData(ADVMData):
 
         # Read the Argonaut '.snr' file into a DataFrame
         arg_snr_file = dataset_path + ".snr"
-        snr_df = cls._read_argonaut_snr_file(arg_snr_file)
+        try:
+            snr_df = cls._read_argonaut_multicell_file(arg_snr_file, r'(^Cell\d{2}(Amp|SNR)\d{1})$')
+        except FileNotFoundError:
+            snr_df = pd.DataFrame()
+
+        arg_vel_file = dataset_path + ".vel"
+        try:
+            # vel_df = cls._read_argonaut_multicell_file(arg_vel_file, r'(^Cell\d{2}V(x|y))')
+            vel_df = cls._read_argonaut_multicell_file(arg_vel_file)
+        except FileNotFoundError:
+            vel_df = pd.DataFrame()
 
         # Read specific configuration values from the Argonaut '.ctl' file into a dictionary.
         arg_ctl_file = dataset_path + ".ctl"
-        config_dict = cls._read_argonaut_ctl_file(arg_ctl_file)
         configuration_parameters = ADVMConfigParam()
-        configuration_parameters.update(config_dict)
+        try:
+            config_dict = cls._read_argonaut_ctl_file(arg_ctl_file)
+            configuration_parameters.update(config_dict)
+        except FileNotFoundError:
+            pass
 
         # Combine the '.snr' and '.dat.' DataFrames into a single acoustic DataFrame, make the timestamp
         # the index, and return an ADVMData object
-        acoustic_df = pd.concat([dat_df, snr_df], axis=1)
+        acoustic_df = pd.concat([dat_df, snr_df, vel_df], axis=1)
         data_origin = datamanager.DataManager.create_data_origin(acoustic_df, dataset_path + "(Arg)")
 
         data_manager = datamanager.DataManager(acoustic_df, data_origin)
