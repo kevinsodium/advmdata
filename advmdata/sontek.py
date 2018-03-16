@@ -191,14 +191,13 @@ class ArgonautADVMData(ADVMData):
         # Read the Argonaut '.snr' file into a DataFrame
         arg_snr_file = dataset_path + ".snr"
         try:
-            snr_df = cls._read_argonaut_multicell_file(arg_snr_file, r'(^Cell\d{2}(Amp|SNR)\d{1})$')
+            snr_df = cls._read_argonaut_multicell_file(arg_snr_file, cls._advm_columns_regex)
         except FileNotFoundError:
             snr_df = pd.DataFrame()
 
         arg_vel_file = dataset_path + ".vel"
         try:
-            # vel_df = cls._read_argonaut_multicell_file(arg_vel_file, r'(^Cell\d{2}V(x|y))')
-            vel_df = cls._read_argonaut_multicell_file(arg_vel_file)
+            vel_df = cls._read_argonaut_multicell_file(arg_vel_file, cls._advm_columns_regex)
         except FileNotFoundError:
             vel_df = pd.DataFrame()
 
