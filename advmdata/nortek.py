@@ -87,8 +87,6 @@ class NortekADVMData(ADVMData):
 
 
 class EzqADVMData(NortekADVMData):
-    def __init__(self):
-        super(EzqADVMData, self).__init__()
 
     _blanking_distance_pattern = 'Blanking distance                     ([0-9]+([.][0-9]*)?|[.][0-9]+) m'
     _cell_size_pattern = 'Cell size                             ([0-9]+([.][0-9]*)?|[.][0-9]+) cm'
@@ -261,8 +259,6 @@ class EzqADVMData(NortekADVMData):
 
 class AquadoppADVMData(NortekADVMData):
     """Manages ADVMData for Nortek's Aquadopp instrument"""
-    def __init__(self):
-        super(AquadoppADVMData, self).__init__()
 
     _cell_size_pattern = 'Cell size                             ([0-9]+([.][0-9]*)?|[.][0-9]+) cm'
     _blanking_distance_pattern = 'Blanking distance                     ([0-9]+([.][0-9]*)?|[.][0-9]+) m'
@@ -417,8 +413,6 @@ class AquadoppADVMData(NortekADVMData):
         data_set_path = os.path.join(data_path, data_set)
 
         configuration_parameters = cls.read_config_param(data_set_path)
-        number_of_cells = cls._read_number_of_cells(data_set_path)
-        configuration_parameters['Number of Cells'] = number_of_cells
 
         sen_df = cls._read_time_series_file(data_set_path, '.sen')
 
@@ -434,4 +428,3 @@ class AquadoppADVMData(NortekADVMData):
         advm_data_manager = DataManager(advm_data_df, advm_data_origin)
 
         return cls(advm_data_manager, configuration_parameters)
-
