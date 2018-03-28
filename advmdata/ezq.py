@@ -1,3 +1,4 @@
+import abc
 import os
 import re
 
@@ -9,98 +10,91 @@ from linearmodel.linearmodel.datamanager import DataManager
 from advmdata.advmdata.core import ADVMData, ADVMConfigParam
 
 
-def combine_time_index(initial_df, wanted_index_df):
-    """
+class NortekADVMData(ADVMData):
+    _blanking_distance_pattern = None
+    _cell_size_pattern = None
+    _frequency_pattern = None
+    _instrument = None
+    _number_of_beams_pattern = None
 
-    :param initial_df: DataFrame with unaligned index
-    :param wanted_index_df: DataFrame with desired index
-    :return: DataFrame with new aligned index
-    """
+    @classmethod
+    def combine_time_index(cls, initial_df, wanted_index_df):
+        """
 
-    # Store original index
-    initial_df_original_index = initial_df.index
+        :param initial_df: DataFrame with unaligned index
+        :param wanted_index_df: DataFrame with desired index
+        :return: DataFrame with new aligned index
+        """
 
-    # Append new index to initial Data Frame
-    initial_df = initial_df.append(pd.DataFrame(index=wanted_index_df.index))
+        # Store original index
+        initial_df_original_index = initial_df.index
 
-    # Interpolate and drop original index
-    initial_df.sort_index(inplace=True)
-    initial_df.interpolate(inplace=True)
-    initial_df.drop(labels=initial_df_original_index, axis=0, inplace=True)
+        # Append new index to initial Data Frame
+        initial_df = initial_df.append(pd.DataFrame(index=wanted_index_df.index))
 
-    return initial_df
+        # Interpolate and drop original index
+        initial_df.sort_index(inplace=True)
+        initial_df.interpolate(inplace=True)
+        initial_df.drop(labels=initial_df_original_index, axis=0, inplace=True)
 
+        return initial_df
 
-def _get_re_value(pattern, string):
+    @staticmethod
+    def _get_re_value(pattern, string):
+        # Search text file for pattern specific to value
+        match = re.search(pattern, string)
+        return match.group(1)
 
-    # Search text file for pattern specific to value
-    match = re.search(pattern, string)
-    return match.group(1)
+    @staticmethod
+    @abc.abstractstaticmethod
+    def _read_number_of_cells(data_set_path):
+        pass
 
+    @classmethod
+    def read_config_param(cls, data_set_path):
+        """
 
-def read_hdr(data_set_path):
-    """
+        :param data_set_path: path of data file
+        :return: returns dictionary based on hdr file
+        """
 
-    :param data_set_path: path of data file
-    :return: returns dictionary based on hdr file
-    """
-
-    # Try two patterns for ADQ and EZQ
-    try:
+        # Try two patterns for ADQ and EZQ
         hdr_file_path = data_set_path + '.hdr'
         with open(hdr_file_path, 'r') as f:
             hdr_text = f.read()
-    except FileNotFoundError:
-        hdr_file_path = data_set_path + '.prf.hdr'
-        with open(hdr_file_path, 'r') as f:
-            hdr_text = f.read()
 
-    blanking_distance_pattern = 'Blanking distance                     ([0-9]+([.][0-9]*)?|[.][0-9]+) m'
-    blanking_distance = float(_get_re_value(blanking_distance_pattern, hdr_text))
+        blanking_distance = float(cls._get_re_value(cls._blanking_distance_pattern, hdr_text))
 
-    # Try two patterns for ADQ and EZQ
-    try:
-        number_of_cells_pattern = 'Number of cells                       ([0-9]*)'
-        number_of_cells = int(_get_re_value(number_of_cells_pattern, hdr_text))
-    except AttributeError:
-        data_file_path = data_set_path + '.ra1'
-        line = linecache.getline(data_file_path, 1).split("   ")
-        number_of_cells = len(line) - 6
+        number_of_cells = cls._read_number_of_cells(data_set_path)
 
-    cell_size_pattern = 'Cell size                             ([0-9]+([.][0-9]*)?|[.][0-9]+) cm'
-    cell_size = float(_get_re_value(cell_size_pattern, hdr_text)) / 100
+        cell_size = float(cls._get_re_value(cls._cell_size_pattern, hdr_text)) / 100
 
-    # Try two patterns for ADQ and EZQ
-    try:
-        number_of_beams_pattern = 'Number of beams                       ([0-9]*)'
-        number_of_beams = int(_get_re_value(number_of_beams_pattern, hdr_text))
-    except AttributeError:
-        number_of_beams_pattern = 'Diagnostics - Number of beams         ([0-9]*)'
-        number_of_beams = int(_get_re_value(number_of_beams_pattern, hdr_text))
+        number_of_beams = int(cls._get_re_value(cls._number_of_beams_pattern, hdr_text))
 
-    frequency_pattern = 'Head frequency                        ([0-9]+([.][0-9]*)?|[.][0-9]+) kHz'
-    frequency = float(_get_re_value(frequency_pattern, hdr_text))
+        frequency = float(cls._get_re_value(cls._frequency_pattern, hdr_text))
 
-    # Separate instrument type
-    if 'AQD' in data_set_path:
-        instrument = 'AQD'
+        keys = ['Frequency', 'Beam Orientation', 'Slant Angle', 'Blanking Distance', 'Cell Size', 'Number of Cells',
+                'Number of Beams', 'Instrument', 'Effective Transducer Diameter']
 
-    if 'EZQ' in data_set_path:
-        instrument = 'EZQ'
+        values = [frequency, 'Horizontal', 25., blanking_distance, cell_size, number_of_cells,
+                  number_of_beams, cls._instrument, 0.01395]
+        config_dict = dict(zip(keys, values))
 
-    keys = ['Frequency', 'Beam Orientation', 'Slant Angle', 'Blanking Distance', 'Cell Size', 'Number of Cells',
-            'Number of Beams', 'Instrument', 'Effective Transducer Diameter']
-    values = [frequency, 'Horizontal', 25., blanking_distance, cell_size, number_of_cells,
-              number_of_beams, instrument, 0.01395]
-    config_dict = dict(zip(keys, values))
+        configuration_parameters = ADVMConfigParam()
+        configuration_parameters.update(config_dict)
 
-    configuration_parameters = ADVMConfigParam()
-    configuration_parameters.update(config_dict)
-
-    return configuration_parameters
+        return configuration_parameters
 
 
-class EzqADVMData(ADVMData):
+class EzqADVMData(NortekADVMData):
+    def __init__(self):
+        super(EzqADVMData, self).__init__()
+
+    _blanking_distance_pattern = 'Blanking distance                     ([0-9]+([.][0-9]*)?|[.][0-9]+) m'
+    _cell_size_pattern = 'Cell size                             ([0-9]+([.][0-9]*)?|[.][0-9]+) cm'
+    _frequency_pattern = 'Head frequency                        ([0-9]+([.][0-9]*)?|[.][0-9]+) kHz'
+    _instrument = 'EZQ'
+    _number_of_beams_pattern = 'Diagnostics - Number of beams         ([0-9]*)'
 
     def _calc_cell_range(self):
         """Calculate range of cells along a single beam
@@ -127,6 +121,14 @@ class EzqADVMData(ADVMData):
         cell_range_df = pd.DataFrame(data=cell_range, index=acoustic_data.index, columns=col_names)
 
         return cell_range_df
+
+    @staticmethod
+    def _read_number_of_cells(data_set_path):
+        data_file_path = data_set_path + '.ra1'
+        line = linecache.getline(data_file_path, 1).split("   ")
+        number_of_cells = len(line) - 6
+
+        return number_of_cells
 
     @staticmethod
     def _read_amp_from_ra(data_set_path, number_of_cells, beam_number):
@@ -231,36 +233,42 @@ class EzqADVMData(ADVMData):
 
     @classmethod
     def create_df(cls, data_file_path, data_set):
-        """Read ADVM data from a Nortek EZQ data set
-
-        :param data_path: Path to directory containing the Aquadopp data set
-        :param data_set: Root name of the files within the data set
-        :return:
         """
 
+        :param data_file_path:
+        :param data_set:
+        :return:
+        """
         data_set_path = os.path.join(data_file_path, data_set)
 
         v_beam_df = cls._read_sens_file(data_set_path)
         temp_df = cls._read_dat_file(data_set_path)
-        configuration_parameters = read_hdr(data_set_path)
+        configuration_parameters = cls.read_config_param(data_set_path)
 
         amp_df = cls._read_backscatter(data_set_path, configuration_parameters)
 
         data_df = pd.concat([v_beam_df, temp_df], axis=1)
 
-        data_df = combine_time_index(data_df, amp_df)
+        data_df = cls.combine_time_index(data_df, amp_df)
 
         advm_data_df = pd.concat([data_df, amp_df], axis=1)
         advm_data_origin = DataManager.create_data_origin(advm_data_df, data_set_path + "(EzQ)")
 
         advm_data_manager = DataManager(advm_data_df, advm_data_origin)
-        print(advm_data_df)
 
         return cls(advm_data_manager, configuration_parameters)
 
 
-class AquadoppADVMData(ADVMData):
+class AquadoppADVMData(NortekADVMData):
     """Manages ADVMData for Nortek's Aquadopp instrument"""
+    def __init__(self):
+        super(AquadoppADVMData, self).__init__()
+
+    _cell_size_pattern = 'Cell size                             ([0-9]+([.][0-9]*)?|[.][0-9]+) cm'
+    _blanking_distance_pattern = 'Blanking distance                     ([0-9]+([.][0-9]*)?|[.][0-9]+) m'
+    _frequency_pattern = 'Head frequency                        ([0-9]+([.][0-9]*)?|[.][0-9]+) kHz'
+    _instrument = 'AQD'
+    _number_of_beams_pattern = 'Number of beams                       ([0-9]*)'
 
     def _calc_cell_range(self):
         """Calculate range of cells along a single beam
@@ -282,7 +290,7 @@ class AquadoppADVMData(ADVMData):
         acoustic_data = self._data_manager.get_data()
         cell_range = np.tile(cell_range, (acoustic_data.shape[0], 1))
 
-        col_names = ['R{:03}'.format(cell) for cell in range(1, number_of_cells+1)]
+        col_names = ['R{:03}'.format(cell) for cell in range(1, number_of_cells + 1)]
 
         cell_range_df = pd.DataFrame(data=cell_range, index=acoustic_data.index, columns=col_names)
 
@@ -320,7 +328,7 @@ class AquadoppADVMData(ADVMData):
                 header_names[i] = 'Temp'
             # set the noise to the standard header
             elif 'Noise amplitude beam' in header_names[i]:
-                beam_number = _get_re_value('Noise amplitude beam ([0-9])', header_names[i])
+                beam_number = cls._get_re_value('Noise amplitude beam ([0-9])', header_names[i])
                 header_names[i] = 'Noise' + beam_number
             elif '(' in header_names[i]:
                 header_names[i] = ' '.join(split_line[1:-1])
@@ -360,6 +368,18 @@ class AquadoppADVMData(ADVMData):
 
         return pd.concat(a_list, axis=1)
 
+    @classmethod
+    def _read_number_of_cells(cls, data_set_path):
+
+        hdr_file_path = data_set_path + '.hdr'
+        with open(hdr_file_path, 'r') as f:
+            hdr_text = f.read()
+
+        number_of_cells_pattern = 'Number of cells                       ([0-9]*)'
+
+        number_of_cells = int(cls._get_re_value(number_of_cells_pattern, hdr_text))
+
+        return number_of_cells
 
     @classmethod
     def _read_time_series_file(cls, data_set_path, data_file_suffix):
@@ -396,12 +416,14 @@ class AquadoppADVMData(ADVMData):
 
         data_set_path = os.path.join(data_path, data_set)
 
-        configuration_parameters = read_hdr(data_set_path)
+        configuration_parameters = cls.read_config_param(data_set_path)
+        number_of_cells = cls._read_number_of_cells(data_set_path)
+        configuration_parameters['Number of Cells'] = number_of_cells
 
         sen_df = cls._read_time_series_file(data_set_path, '.sen')
 
         whd_df = cls._read_time_series_file(data_set_path, '.whd')
-        whd_df = combine_time_index(whd_df, sen_df)
+        whd_df = cls.combine_time_index(whd_df, sen_df)
         whd_df.drop(labels=['Temp'], axis=1, inplace=True)
 
         backscatter_df = cls._read_backscatter(data_set_path, configuration_parameters)
@@ -410,6 +432,6 @@ class AquadoppADVMData(ADVMData):
 
         advm_data_origin = DataManager.create_data_origin(advm_data_df, data_set_path + "(AQD)")
         advm_data_manager = DataManager(advm_data_df, advm_data_origin)
-        print(advm_data_df)
 
         return cls(advm_data_manager, configuration_parameters)
+
