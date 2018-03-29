@@ -11,6 +11,8 @@ from advmdata.advmdata.core import ADVMData, ADVMConfigParam
 
 
 class NortekADVMData(ADVMData):
+    """Super class that has methods and reads configuration parameters, mostly from Header File"""
+    # Initialize the config parameters
     _blanking_distance_pattern = None
     _cell_size_pattern = None
     _frequency_pattern = None
@@ -48,6 +50,7 @@ class NortekADVMData(ADVMData):
     @staticmethod
     @abc.abstractstaticmethod
     def _read_number_of_cells(data_set_path):
+        # Abs static method, replaced in the specific instrument class
         pass
 
     @classmethod
@@ -58,7 +61,7 @@ class NortekADVMData(ADVMData):
         :return: returns dictionary based on hdr file
         """
 
-        # Try two patterns for ADQ and EZQ
+        # Opens the file path
         hdr_file_path = data_set_path + '.hdr'
         with open(hdr_file_path, 'r') as f:
             hdr_text = f.read()
@@ -73,6 +76,7 @@ class NortekADVMData(ADVMData):
 
         frequency = float(cls._get_re_value(cls._frequency_pattern, hdr_text))
 
+        # Patterns provided in the class explicitly
         keys = ['Frequency', 'Beam Orientation', 'Slant Angle', 'Blanking Distance', 'Cell Size', 'Number of Cells',
                 'Number of Beams', 'Instrument', 'Effective Transducer Diameter']
 
@@ -88,6 +92,7 @@ class NortekADVMData(ADVMData):
 
 class EzqADVMData(NortekADVMData):
 
+    # Explicit patterns per instrument in HDR file
     _blanking_distance_pattern = 'Blanking distance                     ([0-9]+([.][0-9]*)?|[.][0-9]+) m'
     _cell_size_pattern = 'Cell size                             ([0-9]+([.][0-9]*)?|[.][0-9]+) cm'
     _frequency_pattern = 'Head frequency                        ([0-9]+([.][0-9]*)?|[.][0-9]+) kHz'
@@ -121,25 +126,21 @@ class EzqADVMData(NortekADVMData):
         return cell_range_df
 
     @staticmethod
-    def _read_number_of_cells(data_set_path):
-        data_file_path = data_set_path + '.ra1'
-        line = linecache.getline(data_file_path, 1).split("   ")
-        number_of_cells = len(line) - 6
-
-        return number_of_cells
-
-    @staticmethod
     def _read_amp_from_ra(data_set_path, number_of_cells, beam_number):
         """Read the backscatter amplitude file into a DataFrame
 
-        :param data_set_path:
-        :param number_of_cells:
-        :param beam_number:
+        :param data_set_path: data path
+        :param number_of_cells: read the number of cells and find amps per cell
+        :param beam_number: label the amp with a beam number
         :return:
         """
+
+        # Names cell based on cell number and beam number
         amp_column_names = ['Cell{:02}Amp{:1}'.format(cell, beam_number) for cell in range(1, number_of_cells + 1)]
         amp_file_path = data_set_path + '.ra' + str(beam_number)
         amp_df = pd.read_table(amp_file_path, header=None, sep='\s+')
+
+        # Drops the first 11 rows, which are the time stamps
         amp_df = amp_df.drop(amp_df.columns[0:11], axis=1)
         amp_df.columns = amp_column_names
 
@@ -149,9 +150,9 @@ class EzqADVMData(NortekADVMData):
     def _read_backscatter(cls, data_set_path, configuration_parameters):
         """Read the multiple backscatter files and return a single DataFrame
 
-        :param data_set_path:
-        :param configuration_parameters:
-        :return:
+        :param data_set_path: data path
+        :param configuration_parameters: config parameters were created in the Super class
+        :return: returns the Data frame with a timestamp index
         """
         datetime_index = cls._read_time_stamp(data_set_path)
         a_list = []
@@ -165,17 +166,31 @@ class EzqADVMData(NortekADVMData):
         return a_list
 
     @staticmethod
+    def _read_number_of_cells(data_set_path):
+        """
+
+        :param data_set_path: data path
+        :return: number of cells for EZQ specific
+        """
+        data_file_path = data_set_path + '.ra1'
+        line = linecache.getline(data_file_path, 1).split("   ")
+        number_of_cells = len(line) - 6
+
+        return number_of_cells
+
+    @staticmethod
     def _read_time_stamp(data_set_path):
         """Read a time stamps of a file into a DataFrame
 
-        :param data_set_path:
-        :param data_file_suffix:
+        :param data_set_path: data path
         :return:
         """
+        # Reads in the timestamp from the RA data
         data_file_path = data_set_path + '.ra1'
         time_df = pd.read_table(data_file_path, header=None, sep='\s+')
         time_df = time_df.drop(time_df.columns[6:], axis=1)
 
+        # Puts timestamp into a time index Data frame
         date_time_columns = ['Month', 'Day', 'Year', 'Hour', 'Minute', 'Second']
         time_df.columns = date_time_columns
 
@@ -230,17 +245,21 @@ class EzqADVMData(NortekADVMData):
         return temperature
 
     @classmethod
-    def create_df(cls, data_file_path, data_set):
+    def read_ezq_data(cls, data_file_path, data_set):
         """
 
-        :param data_file_path:
-        :param data_set:
-        :return:
+        :param data_file_path: data file path
+        :param data_set: name of the data set
+        :return: returns the final Data Frame and source with results
         """
+        # Combine file path and file name
         data_set_path = os.path.join(data_file_path, data_set)
 
+        # Create data Data Frame from the methods from Super Class
         v_beam_df = cls._read_sens_file(data_set_path)
         temp_df = cls._read_dat_file(data_set_path)
+
+        # Create config parameters from Super
         configuration_parameters = cls.read_config_param(data_set_path)
 
         amp_df = cls._read_backscatter(data_set_path, configuration_parameters)
@@ -249,6 +268,7 @@ class EzqADVMData(NortekADVMData):
 
         data_df = cls.combine_time_index(data_df, amp_df)
 
+        # Merge total Data Frames
         advm_data_df = pd.concat([data_df, amp_df], axis=1)
         advm_data_origin = DataManager.create_data_origin(advm_data_df, data_set_path + "(EzQ)")
 
@@ -260,6 +280,7 @@ class EzqADVMData(NortekADVMData):
 class AquadoppADVMData(NortekADVMData):
     """Manages ADVMData for Nortek's Aquadopp instrument"""
 
+    # Explicit patterns specific for AQD
     _cell_size_pattern = 'Cell size                             ([0-9]+([.][0-9]*)?|[.][0-9]+) cm'
     _blanking_distance_pattern = 'Blanking distance                     ([0-9]+([.][0-9]*)?|[.][0-9]+) m'
     _frequency_pattern = 'Head frequency                        ([0-9]+([.][0-9]*)?|[.][0-9]+) kHz'
@@ -367,6 +388,7 @@ class AquadoppADVMData(NortekADVMData):
     @classmethod
     def _read_number_of_cells(cls, data_set_path):
 
+        # Read the number of cells from HDR file, specific to AQD instrument
         hdr_file_path = data_set_path + '.hdr'
         with open(hdr_file_path, 'r') as f:
             hdr_text = f.read()
