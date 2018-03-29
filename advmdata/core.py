@@ -181,7 +181,7 @@ class ADVMConfigParam(ADVMParam):
 class ADVMData:
 
     # regex string to find ADVM data columns
-    _advm_columns_regex = r'^(Temp|Vbeam|Cell\d{2}(Amp|SNR)\d{1}|Noise\d{1})$'
+    _advm_columns_regex = r'^(Temp|Vbeam|Cell\d{2}((Amp|SNR)\d{1}|V(x|y))|Noise\d{1}|Velocity(X|Y))$'
 
     def __init__(self, data_manager, configuration_parameters):
 
