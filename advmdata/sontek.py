@@ -230,7 +230,7 @@ class SL3GADVMData(ADVMData):
         acoustic_data = self._data_manager.get_data()
 
         # Finds config dictionary definitions and determines cell sizes
-        blanking_distance = self._configuration_paramters['Blanking Distance']
+        blanking_distance = self._configuration_parameters['Blanking Distance']
         cell_size = self._configuration_parameters['Cell Size']
         number_of_cells = self._configuration_parameters['Number of Cells']
 
@@ -239,25 +239,41 @@ class SL3GADVMData(ADVMData):
         last_cell_mid_point = first_cell_midpoint + (number_of_cells - 1)*cell_size
 
         # defines linspace
-        cell_range = np.linspace(first_cell_midpoint, last_cell_mid_point, num = number_of_cells)
+        cell_range = np.linspace(first_cell_midpoint, last_cell_mid_point, num=number_of_cells)
         cell_range = np.tile(cell_range, (acoustic_data.shape[0], 1))
 
         col_names = ['R{:03}'.format(cell) for cell in range(1, number_of_cells + 1)]
-        cell_range_df = pd.DataFrame(data=cell_range, index=acoustic_data.index, columns =col_names)
+        cell_range_df = pd.DataFrame(data=cell_range, index=acoustic_data.index, columns=col_names)
 
         return cell_range_df
 
     @staticmethod
-    def _read_mat_file_param(sontek_file_path):
+    def _read_mat_sample_date_time(mat_file):
+        """Reads the sample date/time from the MAT file and converts to Pandas DateTimeIndex
+
+        :param mat_file: Opened MAT file containing SL3G data
+        :return:
+        """
+
+        # Read sample time in as Serial Number (in microseconds from Jan 1st, 2000) and give it a timestamp
+        sample_time = mat_file['FlowData_SampleTime']
+        sample_time = sample_time.flatten()
+        sample_times = [datetime(2000, 1, 1, 0, 0) + timedelta(microseconds=x) for x in sample_time]
+
+        # Set index as the timestamp
+        datetime_index = pd.to_datetime(sample_times)
+
+        return datetime_index
+
+    @staticmethod
+    def _read_mat_param(mat_file):
         """
         Read the Sontek Mat file into a configuration dictionary
 
-        :param sontek_file_path: Filepath containing the Sontek '.mat' file
+        :param mat_file: Opened MAT file containing SL3G data
         :return: Dictionary containing specific configuration parameters
         """
 
-        # Initialize the matfile into a variable
-        mat_file = scipy.io.loadmat(sontek_file_path, struct_as_record=True, squeeze_me=False)
         config_dict = {}
 
         # Determine the instrument type
@@ -280,17 +296,14 @@ class SL3GADVMData(ADVMData):
         # Default Number of Beams
         config_dict['Number of Beams'] = int(2)
 
-        # Read Blanking Distance in as CM, return M
+        # Read Blanking Distance in as centimeters, return meters
         blanking_dist = mat_file['System_IqSetup'][0, 0]['advancedSetup']['SLblankingDistance']
-        if blanking_dist > 100:
-            blanking_dist = blanking_dist / 100
+        blanking_dist = blanking_dist / 100
         config_dict['Blanking Distance'] = float(blanking_dist[0])
 
-        # Read Cell Size in as CM, return M
+        # Read Cell Size in as centimeters, return meters
         cell_size = mat_file['System_IqSetup'][0, 0]['advancedSetup']['SLcellSize']
-        # TODO: Check the units to see if we need to convert to meters
-        if cell_size > 100:
-            cell_size = cell_size/100
+        cell_size = cell_size / 100
         config_dict['Cell Size'] = float(cell_size[0])
 
         # Number of Cells
@@ -301,27 +314,13 @@ class SL3GADVMData(ADVMData):
         return config_dict
 
     @staticmethod
-    def _read_mat_file_dat(sontek_file_path):
+    def _read_mat_dat(mat_file):
         """
         Read the '.mat' file and create a DataFrame for flow parameters
 
-        :param sontek_file_path: Filepath containing the Sontek '.mat' file
+        :param mat_file: Opened MAT file containing SL3G data
         :return: Timestamp formatted DataFrame containing flow parameters
         """
-        # Load .mat file into a variable
-        mat_file = scipy.io.loadmat(sontek_file_path, struct_as_record=True, squeeze_me=False)
-
-        # Read sample time in as Serial Number (in microseconds from Jan 1st, 2000) and give it a timestamp
-        sample_time = mat_file['FlowData_SampleTime']
-        sample_time = sample_time.flatten()
-        sample_times = [datetime(2000, 1, 1, 0, 0) + timedelta(microseconds=x) for x in sample_time]
-
-        # Set index as the timestamp
-        datetime_index = pd.to_datetime(sample_times)
-
-        # Read in sample number total
-        sample_number = mat_file['FlowData_SampleNumber']
-        sample_number = sample_number.flatten()
 
         # Read in temperature
         temperature = mat_file['FlowData_Temp']
@@ -332,42 +331,75 @@ class SL3GADVMData(ADVMData):
         v_beam = v_beam.flatten()
 
         # Create a DataFrame from variables above with 'index=timestamp'
-        dat_df = pd.DataFrame({'Temp': temperature, 'Vertical Beam': v_beam}, index=sample_number)
-        dat_df.set_index(datetime_index, inplace=True)
+        dat_df = pd.DataFrame({'Temp': temperature, 'Vbeam': v_beam})
 
         return dat_df
 
     @staticmethod
-    def _read_sontek_snr(sontek_file_path):
+    def _read_mat_cell_amp(mat_file):
         """
         Read in .mat file and create a DataFrame with both beam's SNR data
 
-        :param sontek_file_path: sontek_file_path: Filepath containing the Sontek '.mat' file
+        :param mat_file: Opened MAT file containing SL3G data
         :return: DataFrame for both beams SNR data
         """
 
-        # Load .mat file into a variable
-        mat_file = scipy.io.loadmat(sontek_file_path, struct_as_record=True, squeeze_me=False)
-
-        # Intensity factor not yet give
-        intensity_factor = np.NaN
-
-        # Beam one SNR data
+        # Beam AMP data
         beam_one_amp = mat_file['Profile_0_Amp']
-        beam_snr = mat_file['FlowData_SNR']
-        beam_one_snr = intensity_factor * (beam_one_amp - beam_snr[:, 0, None])
-
-        # Beam two SNR data
         beam_two_amp = mat_file['Profile_1_Amp']
-        beam_snr = mat_file['FlowData_SNR']
-        beam_two_snr = intensity_factor * (beam_two_amp - beam_snr[:, 1, None])
 
-        # Create DataFrames for both beams and merge them
-        snr_df1 = pd.DataFrame(beam_one_snr)
-        snr_df2 = pd.DataFrame(beam_two_snr)
-        snr_df = pd.concat([snr_df1, snr_df2], axis=1)
+        assert beam_one_amp.shape == beam_two_amp.shape
 
-        return snr_df
+        amp_data = np.hstack((beam_one_amp, beam_two_amp))
+
+        number_of_cells = beam_one_amp.shape[1]
+        column_names = ['Cell{0:02}Amp{1:1}'.format(cell, beam) for beam in [1, 2]
+                        for cell in range(1, number_of_cells+1)]
+
+        # Create DataFrames for both beams
+        amp_df = pd.DataFrame(data=amp_data, columns=column_names)
+
+        return amp_df
+
+    @staticmethod
+    def _read_mat_cell_vel(mat_file):
+        """Read the cell velocity from an SL3G MAT file
+
+        :param mat_file: Opened MAT file containing SL3G data
+        :return:
+        """
+
+        beam_1_velocity_key = 'Profile_0_Vel'
+        beam_2_velocity_key = 'Profile_1_Vel'
+
+        # transform the beam velocity to X, Y velocity
+        beam_velocity = np.stack((mat_file[beam_1_velocity_key], mat_file[beam_2_velocity_key]), axis=1)
+        vel_transform_matrix = [[1.183, -1.183], [0.552, 0.552]]  # TODO: Get more precise transform matrix
+        xy_velocity = np.dot(vel_transform_matrix, beam_velocity)
+
+        # convert the velocity units to m/s
+        beam_1_vel_units = mat_file['Data_Units'][beam_1_velocity_key][0][0][0]
+        beam_2_vel_units = mat_file['Data_Units'][beam_2_velocity_key][0][0][0]
+
+        assert beam_1_vel_units == beam_2_vel_units
+
+        if beam_1_vel_units == 'mm/s':
+            vel_conversion = 1 / 1000
+        elif beam_1_vel_units == 'm/s':
+            vel_conversion = 1
+        else:
+            vel_conversion = np.nan
+
+        xy_velocity = vel_conversion * xy_velocity
+
+        # put the velocity data into a DataFrame
+        number_of_cells = xy_velocity.shape[2]
+        velocity_data = np.hstack([xy_velocity[i, :, :] for i in range(xy_velocity.shape[0])])
+        column_names = ['Cell{0:02}V{1}'.format(cell, direction) for direction in ['x', 'y']
+                        for cell in range(1, number_of_cells + 1)]
+        vel_df = pd.DataFrame(data=velocity_data, columns=column_names)
+
+        return vel_df
 
     @classmethod
     def read_sl3g_mat(cls, mat_file_path):
@@ -379,19 +411,25 @@ class SL3GADVMData(ADVMData):
         :return: ADVMData object containing the Sontek Data
         """
 
+        mat_file = scipy.io.loadmat(mat_file_path, struct_as_record=True, squeeze_me=False)
+
         # Read the Argonaut '.mat' files into DataFrame
-        dat_df = cls._read_mat_file_dat(mat_file_path)
-        snr_df = cls._read_sontek_snr(mat_file_path)
-        config_dict = cls._read_mat_file_param(mat_file_path)
+        dat_df = cls._read_mat_dat(mat_file)
+        amp_df = cls._read_mat_cell_amp(mat_file)
+        vel_df = cls._read_mat_cell_vel(mat_file)
+        config_dict = cls._read_mat_param(mat_file)
 
         # Read specific configuration values from '.mat' file
         configuration_parameters = ADVMConfigParam()
         configuration_parameters.update(config_dict)
 
-        # Combine both DataFrames
-        acoustic_df = pd.concat([dat_df, snr_df], axis=1)
-        data_origin = datamanager.DataManager.create_data_origin(acoustic_df, dataset_path + "(Sontek")
+        # Combine both DataFrames and add date time index
+        acoustic_df = pd.concat([dat_df, amp_df, vel_df], axis=1)
+        datetime_index = cls._read_mat_sample_date_time(mat_file)
+        acoustic_df.set_index(datetime_index, inplace=True)
 
+        # create a data manager from the acoustic data
+        data_origin = datamanager.DataManager.create_data_origin(acoustic_df, mat_file_path + "(SL3G)")
         data_manager = datamanager.DataManager(acoustic_df, data_origin)
 
         return cls(data_manager, configuration_parameters)
