@@ -298,12 +298,12 @@ class SL3GADVMData(ADVMData):
 
         # Read Blanking Distance in as centimeters, return meters
         blanking_dist = mat_file['System_IqSetup'][0, 0]['advancedSetup']['SLblankingDistance']
-        blanking_dist = blanking_dist / 100
+        blanking_dist = blanking_dist / 1000
         config_dict['Blanking Distance'] = float(blanking_dist[0])
 
         # Read Cell Size in as centimeters, return meters
         cell_size = mat_file['System_IqSetup'][0, 0]['advancedSetup']['SLcellSize']
-        cell_size = cell_size / 100
+        cell_size = cell_size / 1000
         config_dict['Cell Size'] = float(cell_size[0])
 
         # Number of Cells
