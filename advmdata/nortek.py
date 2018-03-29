@@ -1,21 +1,291 @@
+import abc
 import os
 import re
 
 import numpy as np
 import pandas as pd
+import linecache
 
-from linearmodel.datamanager import DataManager
-
-from advmdata.core import ADVMData, ADVMConfigParam
-
-
-def _get_re_value(pattern, string):
-    match = re.search(pattern, string)
-    return match.group(1)
+from linearmodel.linearmodel.datamanager import DataManager
+from advmdata.advmdata.core import ADVMData, ADVMConfigParam
 
 
-class AquadoppADVMData(ADVMData):
+class NortekADVMData(ADVMData):
+    """Super class that has methods and reads configuration parameters, mostly from Header File"""
+    # Initialize the config parameters
+    _blanking_distance_pattern = None
+    _cell_size_pattern = None
+    _frequency_pattern = None
+    _instrument = None
+    _number_of_beams_pattern = None
+
+    @classmethod
+    def combine_time_index(cls, initial_df, wanted_index_df):
+        """
+
+        :param initial_df: DataFrame with unaligned index
+        :param wanted_index_df: DataFrame with desired index
+        :return: DataFrame with new aligned index
+        """
+
+        # Store original index
+        initial_df_original_index = initial_df.index
+
+        # Append new index to initial Data Frame
+        initial_df = initial_df.append(pd.DataFrame(index=wanted_index_df.index))
+
+        # Interpolate and drop original index
+        initial_df.sort_index(inplace=True)
+        initial_df.interpolate(inplace=True)
+        initial_df.drop(labels=initial_df_original_index, axis=0, inplace=True)
+
+        return initial_df
+
+    @staticmethod
+    def _get_re_value(pattern, string):
+        # Search text file for pattern specific to value
+        match = re.search(pattern, string)
+        return match.group(1)
+
+    @staticmethod
+    @abc.abstractstaticmethod
+    def _read_number_of_cells(data_set_path):
+        # Abs static method, replaced in the specific instrument class
+        pass
+
+    @classmethod
+    def read_config_param(cls, data_set_path):
+        """
+
+        :param data_set_path: path of data file
+        :return: returns dictionary based on hdr file
+        """
+
+        # Opens the file path
+        hdr_file_path = data_set_path + '.hdr'
+        with open(hdr_file_path, 'r') as f:
+            hdr_text = f.read()
+
+        blanking_distance = float(cls._get_re_value(cls._blanking_distance_pattern, hdr_text))
+
+        number_of_cells = cls._read_number_of_cells(data_set_path)
+
+        cell_size = float(cls._get_re_value(cls._cell_size_pattern, hdr_text)) / 100
+
+        number_of_beams = int(cls._get_re_value(cls._number_of_beams_pattern, hdr_text))
+
+        frequency = float(cls._get_re_value(cls._frequency_pattern, hdr_text))
+
+        # Patterns provided in the class explicitly
+        keys = ['Frequency', 'Beam Orientation', 'Slant Angle', 'Blanking Distance', 'Cell Size', 'Number of Cells',
+                'Number of Beams', 'Instrument', 'Effective Transducer Diameter']
+
+        values = [frequency, 'Horizontal', 25., blanking_distance, cell_size, number_of_cells,
+                  number_of_beams, cls._instrument, 0.01395]
+        config_dict = dict(zip(keys, values))
+
+        configuration_parameters = ADVMConfigParam()
+        configuration_parameters.update(config_dict)
+
+        return configuration_parameters
+
+
+class EzqADVMData(NortekADVMData):
+
+    # Explicit patterns per instrument in HDR file
+    _blanking_distance_pattern = 'Blanking distance                     ([0-9]+([.][0-9]*)?|[.][0-9]+) m'
+    _cell_size_pattern = 'Cell size                             ([0-9]+([.][0-9]*)?|[.][0-9]+) cm'
+    _frequency_pattern = 'Head frequency                        ([0-9]+([.][0-9]*)?|[.][0-9]+) kHz'
+    _instrument = 'EZQ'
+    _number_of_beams_pattern = 'Diagnostics - Number of beams         ([0-9]*)'
+
+    def _calc_cell_range(self):
+        """Calculate range of cells along a single beam
+
+        :return:
+        """
+
+        # TODO: Implement _calc_first_cell_midpoint() and move most of this up to ADVMData
+
+        blanking_distance = self._configuration_parameters['Blanking Distance']
+        cell_size = self._configuration_parameters['Cell Size']
+        number_of_cells = self._configuration_parameters['Number of Cells']
+
+        first_cell_mid_point = blanking_distance + cell_size / 2
+        last_cell_mid_point = first_cell_mid_point + (number_of_cells - 1) * cell_size
+
+        cell_range = np.linspace(first_cell_mid_point, last_cell_mid_point, num=number_of_cells)
+
+        acoustic_data = self._data_manager.get_data()
+        cell_range = np.tile(cell_range, (acoustic_data.shape[0], 1))
+
+        col_names = ['R{:03}'.format(cell) for cell in range(1, number_of_cells + 1)]
+
+        cell_range_df = pd.DataFrame(data=cell_range, index=acoustic_data.index, columns=col_names)
+
+        return cell_range_df
+
+    @staticmethod
+    def _read_amp_from_ra(data_set_path, number_of_cells, beam_number):
+        """Read the backscatter amplitude file into a DataFrame
+
+        :param data_set_path: data path
+        :param number_of_cells: read the number of cells and find amps per cell
+        :param beam_number: label the amp with a beam number
+        :return:
+        """
+
+        # Names cell based on cell number and beam number
+        amp_column_names = ['Cell{:02}Amp{:1}'.format(cell, beam_number) for cell in range(1, number_of_cells + 1)]
+        amp_file_path = data_set_path + '.ra' + str(beam_number)
+        amp_df = pd.read_table(amp_file_path, header=None, sep='\s+')
+
+        # Drops the first 11 rows, which are the time stamps
+        amp_df = amp_df.drop(amp_df.columns[0:11], axis=1)
+        amp_df.columns = amp_column_names
+
+        return amp_df
+
+    @classmethod
+    def _read_backscatter(cls, data_set_path, configuration_parameters):
+        """Read the multiple backscatter files and return a single DataFrame
+
+        :param data_set_path: data path
+        :param configuration_parameters: config parameters were created in the Super class
+        :return: returns the Data frame with a timestamp index
+        """
+        datetime_index = cls._read_time_stamp(data_set_path)
+        a_list = []
+        for beam_number in range(1, configuration_parameters['Number of Beams'] + 1):
+            a_df = cls._read_amp_from_ra(data_set_path, configuration_parameters['Number of Cells'], beam_number)
+            a_list.append(a_df)
+
+        a_list = pd.concat(a_list, axis=1)
+        a_list = a_list.set_index(datetime_index)
+
+        return a_list
+
+    @staticmethod
+    def _read_number_of_cells(data_set_path):
+        """
+
+        :param data_set_path: data path
+        :return: number of cells for EZQ specific
+        """
+        data_file_path = data_set_path + '.ra1'
+        line = linecache.getline(data_file_path, 1).split("   ")
+        number_of_cells = len(line) - 6
+
+        return number_of_cells
+
+    @staticmethod
+    def _read_time_stamp(data_set_path):
+        """Read a time stamps of a file into a DataFrame
+
+        :param data_set_path: data path
+        :return:
+        """
+        # Reads in the timestamp from the RA data
+        data_file_path = data_set_path + '.ra1'
+        time_df = pd.read_table(data_file_path, header=None, sep='\s+')
+        time_df = time_df.drop(time_df.columns[6:], axis=1)
+
+        # Puts timestamp into a time index Data frame
+        date_time_columns = ['Month', 'Day', 'Year', 'Hour', 'Minute', 'Second']
+        time_df.columns = date_time_columns
+
+        datetime_index = pd.to_datetime(time_df)
+
+        return datetime_index
+
+    @staticmethod
+    def _read_sens_file(data_set_path):
+        """Read the vertical beam data into a DataFrame
+
+        :param data_set_path:
+        :return:
+        """
+        data_file_path = data_set_path + '.sen'
+        time_df = pd.read_table(data_file_path, header=None, sep='\s+')
+        time_df = time_df.drop(time_df.columns[6:], axis=1)
+
+        date_time_columns = ['Month', 'Day', 'Year', 'Hour', 'Minute', 'Second']
+        time_df.columns = date_time_columns
+
+        datetime_index = pd.to_datetime(time_df)
+
+        sens_file = pd.read_table(data_file_path, header=None, sep='\s+')
+        vertical_beam = pd.DataFrame(sens_file[10])
+        vertical_beam.index = datetime_index
+        vertical_beam.columns = ['Vertical Beam']
+
+        return vertical_beam
+
+    @staticmethod
+    def _read_dat_file(data_set_path):
+        """Read the Temperature data into a DataFrame
+
+        :param data_set_path:
+        :return:
+        """
+
+        data_file_path = data_set_path + '.dat'
+        time_df = pd.read_table(data_file_path, header=None, sep='\s+')
+        time_df = time_df.drop(time_df.columns[6:], axis=1)
+
+        date_time_columns = ['Month', 'Day', 'Year', 'Hour', 'Minute', 'Second']
+        time_df.columns = date_time_columns
+
+        datetime_index = pd.to_datetime(time_df)
+        dat_file = pd.read_table(data_file_path, header=None, sep='\s+')
+        temperature = pd.DataFrame(dat_file[10])
+        temperature.index = datetime_index
+        temperature.columns = ['Temp']
+
+        return temperature
+
+    @classmethod
+    def read_ezq_data(cls, data_file_path, data_set):
+        """
+
+        :param data_file_path: data file path
+        :param data_set: name of the data set
+        :return: returns the final Data Frame and source with results
+        """
+        # Combine file path and file name
+        data_set_path = os.path.join(data_file_path, data_set)
+
+        # Create data Data Frame from the methods from Super Class
+        v_beam_df = cls._read_sens_file(data_set_path)
+        temp_df = cls._read_dat_file(data_set_path)
+
+        # Create config parameters from Super
+        configuration_parameters = cls.read_config_param(data_set_path)
+
+        amp_df = cls._read_backscatter(data_set_path, configuration_parameters)
+
+        data_df = pd.concat([v_beam_df, temp_df], axis=1)
+
+        data_df = cls.combine_time_index(data_df, amp_df)
+
+        # Merge total Data Frames
+        advm_data_df = pd.concat([data_df, amp_df], axis=1)
+        advm_data_origin = DataManager.create_data_origin(advm_data_df, data_set_path + "(EzQ)")
+
+        advm_data_manager = DataManager(advm_data_df, advm_data_origin)
+
+        return cls(advm_data_manager, configuration_parameters)
+
+
+class AquadoppADVMData(NortekADVMData):
     """Manages ADVMData for Nortek's Aquadopp instrument"""
+
+    # Explicit patterns specific for AQD
+    _cell_size_pattern = 'Cell size                             ([0-9]+([.][0-9]*)?|[.][0-9]+) cm'
+    _blanking_distance_pattern = 'Blanking distance                     ([0-9]+([.][0-9]*)?|[.][0-9]+) m'
+    _frequency_pattern = 'Head frequency                        ([0-9]+([.][0-9]*)?|[.][0-9]+) kHz'
+    _instrument = 'AQD'
+    _number_of_beams_pattern = 'Number of beams                       ([0-9]*)'
 
     def _calc_cell_range(self):
         """Calculate range of cells along a single beam
@@ -37,7 +307,7 @@ class AquadoppADVMData(ADVMData):
         acoustic_data = self._data_manager.get_data()
         cell_range = np.tile(cell_range, (acoustic_data.shape[0], 1))
 
-        col_names = ['R{:03}'.format(cell) for cell in range(1, number_of_cells+1)]
+        col_names = ['R{:03}'.format(cell) for cell in range(1, number_of_cells + 1)]
 
         cell_range_df = pd.DataFrame(data=cell_range, index=acoustic_data.index, columns=col_names)
 
@@ -75,7 +345,7 @@ class AquadoppADVMData(ADVMData):
                 header_names[i] = 'Temp'
             # set the noise to the standard header
             elif 'Noise amplitude beam' in header_names[i]:
-                beam_number = _get_re_value('Noise amplitude beam ([0-9])', header_names[i])
+                beam_number = cls._get_re_value('Noise amplitude beam ([0-9])', header_names[i])
                 header_names[i] = 'Noise' + beam_number
             elif '(' in header_names[i]:
                 header_names[i] = ' '.join(split_line[1:-1])
@@ -115,44 +385,19 @@ class AquadoppADVMData(ADVMData):
 
         return pd.concat(a_list, axis=1)
 
-    @staticmethod
-    def _read_hdr(data_set_path):
-        """Reads the HDR file. Returns configuration parameters.
+    @classmethod
+    def _read_number_of_cells(cls, data_set_path):
 
-        :param hdr_file_path:
-        :return: config_parameters
-        """
-
+        # Read the number of cells from HDR file, specific to AQD instrument
         hdr_file_path = data_set_path + '.hdr'
-
         with open(hdr_file_path, 'r') as f:
             hdr_text = f.read()
 
-        blanking_distance_pattern = 'Blanking distance                     ([0-9]+([.][0-9]*)?|[.][0-9]+) m'
-        blanking_distance = float(_get_re_value(blanking_distance_pattern, hdr_text))
-
         number_of_cells_pattern = 'Number of cells                       ([0-9]*)'
-        number_of_cells = int(_get_re_value(number_of_cells_pattern, hdr_text))
 
-        cell_size_pattern = 'Cell size                             ([0-9]+([.][0-9]*)?|[.][0-9]+) cm'
-        cell_size = float(_get_re_value(cell_size_pattern, hdr_text)) / 100
+        number_of_cells = int(cls._get_re_value(number_of_cells_pattern, hdr_text))
 
-        number_of_beams_pattern = 'Number of beams                       ([0-9]*)'
-        number_of_beams = int(_get_re_value(number_of_beams_pattern, hdr_text))
-
-        frequency_pattern = 'Head frequency                        ([0-9]+([.][0-9]*)?|[.][0-9]+) kHz'
-        frequency = float(_get_re_value(frequency_pattern, hdr_text))
-
-        keys = ['Frequency', 'Beam Orientation', 'Slant Angle', 'Blanking Distance', 'Cell Size', 'Number of Cells',
-                'Number of Beams', 'Instrument', 'Effective Transducer Diameter']
-        values = [frequency, 'Horizontal', 25., blanking_distance, cell_size, number_of_cells,
-                  number_of_beams, 'AQD', 0.01395]
-        config_dict = dict(zip(keys, values))
-
-        configuration_parameters = ADVMConfigParam()
-        configuration_parameters.update(config_dict)
-
-        return configuration_parameters
+        return number_of_cells
 
     @classmethod
     def _read_time_series_file(cls, data_set_path, data_file_suffix):
@@ -189,16 +434,12 @@ class AquadoppADVMData(ADVMData):
 
         data_set_path = os.path.join(data_path, data_set)
 
-        configuration_parameters = cls._read_hdr(data_set_path)
+        configuration_parameters = cls.read_config_param(data_set_path)
 
         sen_df = cls._read_time_series_file(data_set_path, '.sen')
 
         whd_df = cls._read_time_series_file(data_set_path, '.whd')
-        whd_df_original_index = whd_df.index
-        whd_df = whd_df.append(pd.DataFrame(index=sen_df.index))
-        whd_df.sort_index(inplace=True)
-        whd_df.interpolate(inplace=True)
-        whd_df.drop(labels=whd_df_original_index, axis=0, inplace=True)
+        whd_df = cls.combine_time_index(whd_df, sen_df)
         whd_df.drop(labels=['Temp'], axis=1, inplace=True)
 
         backscatter_df = cls._read_backscatter(data_set_path, configuration_parameters)
