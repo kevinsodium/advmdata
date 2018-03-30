@@ -17,6 +17,11 @@ class ADVMDataIncompatibleError(ADVMError):
     pass
 
 
+class ADVMDataReadError(ADVMError):
+    """Exception for errors occurring when reading ADVM data"""
+    pass
+
+
 class ADVMParam(abc.ABC):
     """Base class for ADVM parameter classes"""
 
