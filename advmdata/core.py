@@ -17,6 +17,11 @@ class ADVMDataIncompatibleError(ADVMError):
     pass
 
 
+class ADVMDataReadError(ADVMError):
+    """Exception for errors occurring when reading ADVM data"""
+    pass
+
+
 class ADVMParam(abc.ABC):
     """Base class for ADVM parameter classes"""
 
@@ -195,7 +200,7 @@ class ADVMData:
         data_variable_list = list(data_origin['variable'])
         acoustic_variable_idx = [i for i, item in enumerate(data_variable_list)
                                  if re.search(self._advm_columns_regex, item)]
-        acoustic_data_origin = data_origin.ix[acoustic_variable_idx]
+        acoustic_data_origin = data_origin.iloc[acoustic_variable_idx]
 
         self._data_manager = datamanager.DataManager(acoustic_df, acoustic_data_origin)
 
