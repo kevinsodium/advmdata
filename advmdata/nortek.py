@@ -16,6 +16,9 @@ class NortekADVMData(ADVMData):
     _frequency_pattern = 'Head frequency                        ([0-9]+([.][0-9]*)?|[.][0-9]+) kHz'
     _number_of_beams_pattern = 'Number of beams                       ([0-9]*)'
 
+    # Regex patterns for reading config parameters. If applicable, they must be defined by subclasses
+    _number_of_cells_pattern = None
+
     # Instrument type, must be defined in subclasses
     _instrument = None
 
@@ -75,6 +78,16 @@ class NortekADVMData(ADVMData):
 
         values = [frequency, 'Horizontal', nortek_slant_angle, number_of_beams,
                   cls._instrument, nortek_effective_transducer_diameter]
+
+        # try to get the number of cells from the HDR file.
+        # if it fails, the subclass must define the number of cells elsewhere
+        try:
+            number_of_cells = int(cls._get_re_value(cls._number_of_cells_pattern, hdr_text))
+            keys.append('Number of Cells')
+            values.append(number_of_cells)
+        except TypeError:
+            pass
+
         config_dict = dict(zip(keys, values))
 
         configuration_parameters = ADVMConfigParam()
@@ -225,13 +238,16 @@ class EZQADVMData(NortekADVMData):
 
     @classmethod
     def read_ezq_data(cls, data_set_path, cell_size):
-        """
+        """Read ADVM data from a Nortek EZQ data set
 
-        :param data_set_path:
-        :param cell_size:
+        The data set must contain SEN, DAT, and RA[n] files, where n is the beam number.
+
+        Temperature, vertical beam, noise, and backscatter are read from the files.
+
+        :param data_set_path: Path to directory containing the Aquadopp data set
+        :param cell_size: Cell size of the instrument configuration
         :return:
         """
-
         # Create config parameters
         configuration_parameters = cls._read_config_param(data_set_path)
         configuration_parameters['Cell Size'] = cell_size
@@ -262,6 +278,7 @@ class AquadoppADVMData(NortekADVMData):
     """Handles specifics for the Nortek Aquadopp instrument"""
 
     _instrument = 'AQD'
+    _number_of_cells_pattern = 'Number of cells                       ([0-9]*)'
 
     @classmethod
     def _get_header_names_from_hdr(cls, hdr_file_path, data_file_path):
@@ -354,20 +371,6 @@ class AquadoppADVMData(NortekADVMData):
         return blanking_distance
 
     @classmethod
-    def _read_number_of_cells(cls, data_set_path):
-
-        # Read the number of cells from HDR file, specific to AQD instrument
-        hdr_file_path = data_set_path + '.hdr'
-        with open(hdr_file_path, 'r') as f:
-            hdr_text = f.read()
-
-        number_of_cells_pattern = 'Number of cells                       ([0-9]*)'
-
-        number_of_cells = int(cls._get_re_value(number_of_cells_pattern, hdr_text))
-
-        return number_of_cells
-
-    @classmethod
     def _read_time_series_file(cls, data_set_path, data_file_suffix):
         """Read a time series file into a DataFrame
 
@@ -392,29 +395,34 @@ class AquadoppADVMData(NortekADVMData):
         return data_file_df
 
     @classmethod
-    def read_aquadopp_data(cls, data_path, data_set):
+    def read_aquadopp_data(cls, data_set_path):
         """Read ADVM data from a Nortek Aquadopp data set
 
-        :param data_path: Path to directory containing the Aquadopp data set
-        :param data_set: Root name of the files within the data set
+        The data set must contain SEN, WHD, and A[n] files, where n is the beam number.
+
+        Temperature, noise, and backscatter are read from the files.
+
+        :param data_set_path: Path to directory containing the Aquadopp data set
         :return:
         """
 
-        data_set_path = os.path.join(data_path, data_set)
-
+        # read and create configuration parameters
         configuration_parameters = cls._read_config_param(data_set_path)
 
+        # read the data
         sen_df = cls._read_time_series_file(data_set_path, '.sen')
-
         whd_df = cls._read_time_series_file(data_set_path, '.whd')
-        # whd_df = cls._combine_time_index(whd_df, sen_df)
-        whd_df.drop(labels=['Temp'], axis=1, inplace=True)
-
         backscatter_df = cls._read_backscatter(data_set_path, configuration_parameters)
         backscatter_df.set_index(sen_df.index, inplace=True)
-        advm_data_df = pd.concat([sen_df, whd_df, backscatter_df], axis=1)
 
-        advm_data_origin = DataManager.create_data_origin(advm_data_df, data_set_path + "(AQD)")
+        # find the intersection of the SEN and WHD files and drop it from the WHD file
+        columns_intersection = whd_df.columns.intersection(sen_df.columns)
+        whd_df.drop(labels=columns_intersection, axis=1, inplace=True)
+
+        # create a DataManager
+        advm_data_df = pd.concat([sen_df, whd_df, backscatter_df], axis=1)
+        advm_data_origin = DataManager.create_data_origin(advm_data_df, data_set_path + " (AQD)")
         advm_data_manager = DataManager(advm_data_df, advm_data_origin)
 
+        # create and return an AquadoppADVMData instance
         return cls(advm_data_manager, configuration_parameters)
