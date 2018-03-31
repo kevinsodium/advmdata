@@ -90,25 +90,6 @@ class EZQADVMData(NortekADVMData):
     _instrument = 'EZQ'
     _number_of_beams_pattern = 'Diagnostics - Number of beams         ([0-9]*)'
 
-    def __init__(self, data_manager, configuration_parameters):
-        """Creates an instance of EZQADVMData.
-
-        The initialization expects to be called from the read_ezq_data method.
-
-        :param data_manager:
-        :param configuration_parameters:
-        """
-
-        blanking_series = data_manager.get_variable('Blanking')['Blanking']
-        blanking_distance = self._get_blanking_distance(blanking_series)
-        configuration_parameters['Blanking Distance'] = blanking_distance
-
-        number_of_cells = self._get_number_of_cells(data_manager.get_data(),
-                                                    configuration_parameters['Number of Beams'])
-        configuration_parameters['Number of Cells'] = int(number_of_cells)
-
-        super().__init__(data_manager, configuration_parameters)
-
     @staticmethod
     def _get_blanking_distance(blanking_distance_series):
         """Gets the blanking distance from the pass Pandas Series.
@@ -262,6 +243,13 @@ class EZQADVMData(NortekADVMData):
 
         # Merge all Data Frames
         data_df = pd.concat([v_beam_df, temp_df, amp_df], axis=1)
+
+        blanking_series = data_df['Blanking']
+        blanking_distance = cls._get_blanking_distance(blanking_series)
+        configuration_parameters['Blanking Distance'] = blanking_distance
+
+        number_of_cells = cls._get_number_of_cells(data_df, configuration_parameters['Number of Beams'])
+        configuration_parameters['Number of Cells'] = int(number_of_cells)
 
         # create DataManager
         advm_data_origin = DataManager.create_data_origin(data_df, data_set_path + " (EZQ)")
