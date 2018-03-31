@@ -1,10 +1,8 @@
-import abc
 import os
 import re
 
 import numpy as np
 import pandas as pd
-import linecache
 
 from linearmodel.datamanager import DataManager
 from advmdata.core import ADVMData, ADVMConfigParam, ADVMDataReadError
@@ -51,44 +49,6 @@ class NortekADVMData(ADVMData):
         match = re.search(pattern, string)
         return match.group(1)
 
-    @staticmethod
-    @abc.abstractmethod
-    def _get_blanking_distance(data_set_path):
-        """Returns the blanking distance. Must be implemented by subclasses.
-
-        :param data_set_path:
-        :return:
-        """
-        pass
-
-    @staticmethod
-    @abc.abstractmethod
-    def _read_number_of_cells(data_set_path):
-        # Abs static method, implemented in the specific instrument class
-        pass
-
-    @classmethod
-    def _combine_time_index(cls, initial_df, wanted_index_df):
-        """
-
-        :param initial_df: DataFrame with unaligned index
-        :param wanted_index_df: DataFrame with desired index
-        :return: DataFrame with new aligned index
-        """
-
-        # Store original index
-        initial_df_original_index = initial_df.index
-
-        # Append new index to initial Data Frame
-        initial_df = initial_df.append(pd.DataFrame(index=wanted_index_df.index))
-
-        # Interpolate and drop original index
-        initial_df.sort_index(inplace=True)
-        initial_df.interpolate(inplace=True)
-        initial_df.drop(labels=initial_df_original_index, axis=0, inplace=True)
-
-        return initial_df
-
     @classmethod
     def _read_config_param(cls, data_set_path):
         """
@@ -102,26 +62,19 @@ class NortekADVMData(ADVMData):
         with open(hdr_file_path, 'r') as f:
             hdr_text = f.read()
 
-        blanking_distance = cls._get_blanking_distance(data_set_path)
-
-        number_of_cells = cls._read_number_of_cells(data_set_path)
-
-        cell_size = float(cls._get_re_value(cls._cell_size_pattern, hdr_text)) / 100
-
         number_of_beams = int(cls._get_re_value(cls._number_of_beams_pattern, hdr_text))
 
         frequency = float(cls._get_re_value(cls._frequency_pattern, hdr_text))
 
-        # Patterns provided in the class explicitly
-        keys = ['Frequency', 'Beam Orientation', 'Slant Angle', 'Blanking Distance', 'Cell Size', 'Number of Cells',
-                'Number of Beams', 'Instrument', 'Effective Transducer Diameter']
+        keys = ['Frequency', 'Beam Orientation', 'Slant Angle', 'Number of Beams',
+                'Instrument', 'Effective Transducer Diameter']
 
         # default values for all(?) Nortek instruments
         nortek_slant_angle = 25.
         nortek_effective_transducer_diameter = 0.01395
 
-        values = [frequency, 'Horizontal', nortek_slant_angle, blanking_distance, cell_size, number_of_cells,
-                  number_of_beams, cls._instrument, nortek_effective_transducer_diameter]
+        values = [frequency, 'Horizontal', nortek_slant_angle, number_of_beams,
+                  cls._instrument, nortek_effective_transducer_diameter]
         config_dict = dict(zip(keys, values))
 
         configuration_parameters = ADVMConfigParam()
@@ -130,11 +83,67 @@ class NortekADVMData(ADVMData):
         return configuration_parameters
 
 
-class EzqADVMData(NortekADVMData):
+class EZQADVMData(NortekADVMData):
+    """Handles specifics for the Nortek EZQ instrument"""
 
     # Explicit patterns per instrument in HDR file
     _instrument = 'EZQ'
     _number_of_beams_pattern = 'Diagnostics - Number of beams         ([0-9]*)'
+
+    def __init__(self, data_manager, configuration_parameters):
+        """Creates an instance of EZQADVMData.
+
+        The initialization expects to be called from the read_ezq_data method.
+
+        :param data_manager:
+        :param configuration_parameters:
+        """
+
+        blanking_series = data_manager.get_variable('Blanking')['Blanking']
+        blanking_distance = self._get_blanking_distance(blanking_series)
+        configuration_parameters['Blanking Distance'] = blanking_distance
+
+        number_of_cells = self._get_number_of_cells(data_manager.get_data(),
+                                                    configuration_parameters['Number of Beams'])
+        configuration_parameters['Number of Cells'] = int(number_of_cells)
+
+        super().__init__(data_manager, configuration_parameters)
+
+    @staticmethod
+    def _get_blanking_distance(blanking_distance_series):
+        """Gets the blanking distance from the pass Pandas Series.
+
+        Raises an ADVMDataReadError if there are more than one unique blanking distances
+
+        :param blanking_distance_series: Series containing blanking distance
+        :return:
+        """
+
+        unique_blanking_distance = blanking_distance_series.dropna().unique()
+
+        # make sure there's only one unique blanking distance
+        if unique_blanking_distance.shape != (1,):
+            raise ADVMDataReadError
+
+        return unique_blanking_distance[0]
+
+    @staticmethod
+    def _get_number_of_cells(data_df, number_of_beams):
+        """Returns the number of cells based on the number of backscatter columns in data_df
+
+        :param data_df: Pandas DataFrame containing acoustic data
+        :param number_of_beams: Number of beams in the instrument configuration
+        :return:
+        """
+
+        backscatter_regex = r'^(Cell\d{2}Amp\d{1})$'
+        backscatter_columns = data_df.filter(regex=backscatter_regex)
+        number_of_cells = backscatter_columns.shape[1] / number_of_beams
+
+        if not number_of_cells.is_integer():
+            raise ADVMDataReadError("Error reading backscatter data: Unable to determine the number of cells")
+
+        return number_of_cells
 
     @classmethod
     def _read_backscatter(cls, data_set_path, configuration_parameters):
@@ -187,25 +196,6 @@ class EzqADVMData(NortekADVMData):
 
         return beam_data_df
 
-    @classmethod
-    def _get_blanking_distance(cls, data_set_path):
-        """Reads the blanking distance from beam 1 file (RA1)
-
-        :param data_set_path: Root dataset path name
-        :return:
-        """
-
-        beam_1_df = cls._read_beam_file(data_set_path, 1)
-        blanking_distance_series = beam_1_df['Blanking']
-
-        unique_blanking_distance = blanking_distance_series.unique()
-
-        # make sure there's only one unique blanking distance
-        if unique_blanking_distance.shape != (1,):
-            raise ADVMDataReadError
-
-        return unique_blanking_distance[0]
-
     @staticmethod
     def _read_dat_file(data_set_path):
         """Read the Temperature data into a DataFrame
@@ -230,19 +220,6 @@ class EzqADVMData(NortekADVMData):
         return temperature
 
     @staticmethod
-    def _read_number_of_cells(data_set_path):
-        """
-
-        :param data_set_path: data path
-        :return: number of cells for EZQ specific
-        """
-        data_file_path = data_set_path + '.ra1'
-        line = linecache.getline(data_file_path, 1).split("   ")
-        number_of_cells = len(line) - 6
-
-        return number_of_cells
-
-    @staticmethod
     def _read_sen_file(data_set_path):
         """Read the vertical beam data into a DataFrame
 
@@ -265,54 +242,36 @@ class EzqADVMData(NortekADVMData):
 
         return vertical_beam
 
-    @staticmethod
-    def _read_time_stamp(data_file_path):
-        """Read a time stamps of a file into a DataFrame
-
-        :param data_file_path: data path
-        :return:
-        """
-        # Reads in the timestamp from the RA data
-        time_df = pd.read_table(data_file_path, header=None, sep='\s+')
-        time_df = time_df.drop(time_df.columns[6:], axis=1)
-
-        # Puts timestamp into a time index Data frame
-        date_time_columns = ['Month', 'Day', 'Year', 'Hour', 'Minute', 'Second']
-        time_df.columns = date_time_columns
-
-        datetime_index = pd.to_datetime(time_df)
-
-        return datetime_index
-
     @classmethod
-    def read_ezq_data(cls, data_set_path):
+    def read_ezq_data(cls, data_set_path, cell_size):
         """
 
         :param data_set_path:
+        :param cell_size:
         :return:
         """
+
+        # Create config parameters
+        configuration_parameters = cls._read_config_param(data_set_path)
+        configuration_parameters['Cell Size'] = cell_size
 
         # Create DataFrames
         v_beam_df = cls._read_sen_file(data_set_path)
         temp_df = cls._read_dat_file(data_set_path)
-
-        # Create config parameters
-        configuration_parameters = cls._read_config_param(data_set_path)
-
         amp_df = cls._read_backscatter(data_set_path, configuration_parameters)
 
+        # Merge all Data Frames
         data_df = pd.concat([v_beam_df, temp_df, amp_df], axis=1)
 
-        # Merge all Data Frames
+        # create DataManager
         advm_data_origin = DataManager.create_data_origin(data_df, data_set_path + " (EZQ)")
-
         advm_data_manager = DataManager(data_df, advm_data_origin)
 
         return cls(advm_data_manager, configuration_parameters)
 
 
 class AquadoppADVMData(NortekADVMData):
-    """Manages ADVMData for Nortek's Aquadopp instrument"""
+    """Handles specifics for the Nortek Aquadopp instrument"""
 
     _instrument = 'AQD'
 
