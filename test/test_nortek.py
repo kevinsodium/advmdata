@@ -81,7 +81,7 @@ class TestAquadoppADVMDataInit(TestNortekADVMDataInit):
                                      'Frequency': 2000.0,
                                      'Instrument': 'AQD',
                                      'Number of Beams': 2,
-                                     'Number of Cells': 50,
+                                     'Number of Cells': 10,
                                      'Slant Angle': 25.0}
 
     def test_aquadopp_cell_range(self):
@@ -113,7 +113,7 @@ class TestEZQADVMDataInit(TestNortekADVMDataInit):
                                      'Frequency': 1000.0,
                                      'Instrument': 'EZQ',
                                      'Number of Beams': 4,
-                                     'Number of Cells': 64,
+                                     'Number of Cells': 10,
                                      'Slant Angle': 25.0}
 
         test_data_set = 'EZQ'
