@@ -59,12 +59,12 @@ class ArgonautADVMData(ADVMData):
         line = linecache.getline(arg_ctl_filepath, 10).strip()
         arg_type = line.split("ArgType ------------------- ")[-1:]
 
-        if arg_type == "SL":
+        config_dict['Instrument'] = arg_type[0]
+
+        if config_dict['Instrument'] == 'SL':
             config_dict['Beam Orientation'] = "Horizontal"
-            config_dict['Instrument'] = 'SL'
-        else:
+        elif config_dict['Instrument'] == 'SW':
             config_dict['Beam Orientation'] = "Vertical"
-            config_dict['Instrument'] = 'SW'
 
         line = linecache.getline(arg_ctl_filepath, 12).strip()
         frequency = line.split("Frequency ------- (kHz) --- ")[-1:]
@@ -142,9 +142,9 @@ class ArgonautADVMData(ADVMData):
         # Read the Argonaut '.snr' file into a DataFrame, combine first two rows to make column headers,
         # and remove unused datetime columns from the DataFrame.
         snr_df = pd.read_table(arg_snr_filepath, sep='\s+', header=None)
-        header = snr_df.ix[0] + snr_df.ix[1]
+        header = snr_df.iloc[0] + snr_df.iloc[1]
         snr_df.columns = header.str.replace(r"\(.*\)", "")  # remove parentheses and everything inside them from headers
-        snr_df = snr_df.ix[2:]
+        snr_df = snr_df.iloc[2:]
 
         # rename columns to recognizable date/time elements
         column_names = list(snr_df.columns)
@@ -157,7 +157,7 @@ class ArgonautADVMData(ADVMData):
         snr_df.columns = column_names
 
         # create a datetime index and set the dataframe index
-        datetime_index = pd.to_datetime(snr_df.ix[:, 'Year':'Second'])
+        datetime_index = pd.to_datetime(snr_df.loc[:, 'Year':'Second'])
         snr_df.set_index(datetime_index, inplace=True)
 
         # remove non-relevant columns
@@ -170,39 +170,35 @@ class ArgonautADVMData(ADVMData):
         return snr_df
 
     @classmethod
-    def read_argonaut_data(cls, data_directory, filename):
+    def read_argonaut_data(cls, data_set_path):
         """Loads an Argonaut data set into an ADVMData class object.
 
         The DAT, SNR, and CTL ASCII files that are exported (with headers) from ViewArgonaut must be present.
 
-        :param data_directory: file path containing the Argonaut data files
+        :param data_directory: Full path to the Argonaut data files
         :type data_directory: str
-        :param filename: root filename for the 3 Argonaut files
-        :type filename: str
         :return: ADVMData object containing the Argonaut data set information
         """
 
-        dataset_path = os.path.join(data_directory, filename)
-
         # Read the Argonaut '.dat' file into a DataFrame
-        arg_dat_file = dataset_path + ".dat"
+        arg_dat_file = data_set_path + ".dat"
         dat_df = cls._read_argonaut_dat_file(arg_dat_file)
 
         # Read the Argonaut '.snr' file into a DataFrame
-        arg_snr_file = dataset_path + ".snr"
+        arg_snr_file = data_set_path + ".snr"
         try:
             snr_df = cls._read_argonaut_multicell_file(arg_snr_file, cls._advm_columns_regex)
         except FileNotFoundError:
             snr_df = pd.DataFrame()
 
-        arg_vel_file = dataset_path + ".vel"
+        arg_vel_file = data_set_path + ".vel"
         try:
             vel_df = cls._read_argonaut_multicell_file(arg_vel_file, cls._advm_columns_regex)
         except FileNotFoundError:
             vel_df = pd.DataFrame()
 
         # Read specific configuration values from the Argonaut '.ctl' file into a dictionary.
-        arg_ctl_file = dataset_path + ".ctl"
+        arg_ctl_file = data_set_path + ".ctl"
         configuration_parameters = ADVMConfigParam()
         try:
             config_dict = cls._read_argonaut_ctl_file(arg_ctl_file)
@@ -213,7 +209,9 @@ class ArgonautADVMData(ADVMData):
         # Combine the '.snr' and '.dat.' DataFrames into a single acoustic DataFrame, make the timestamp
         # the index, and return an ADVMData object
         acoustic_df = pd.concat([dat_df, snr_df, vel_df], axis=1)
-        data_origin = datamanager.DataManager.create_data_origin(acoustic_df, dataset_path + "(Arg)")
+
+        data_set_suffix = " (" + configuration_parameters['Instrument'] + ")"
+        data_origin = datamanager.DataManager.create_data_origin(acoustic_df, data_set_path + data_set_suffix)
 
         data_manager = datamanager.DataManager(acoustic_df, data_origin)
 
