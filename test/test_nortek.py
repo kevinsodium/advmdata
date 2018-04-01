@@ -6,8 +6,10 @@ import pandas as pd
 
 from advmdata.nortek import AquadoppADVMData, EZQADVMData
 
+current_path = os.path.dirname(os.path.realpath(__file__))
+
 # relative top level path of nortek data
-nortek_data_path = os.path.join('data', 'nortek')
+nortek_data_path = os.path.join(current_path, 'data', 'nortek')
 
 # Aquadopp test data path
 aqd_data_path = os.path.join(nortek_data_path, 'Aquadopp')
@@ -61,6 +63,9 @@ class TestNortekADVMDataInit(unittest.TestCase):
 
         expected_origin_path = self.data_set_path + '_expected_origin.txt'
         expected_origin = pd.read_table(expected_origin_path, index_col=0)
+
+        data_path_suffix = " (" + self.expected_config_dict['Instrument'] + ")"
+        expected_origin.replace(to_replace='{origin path}', value=self.data_set_path + data_path_suffix, inplace=True)
 
         pd.testing.assert_frame_equal(read_results_origin, expected_origin)
 
