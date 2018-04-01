@@ -33,7 +33,7 @@ class NortekADVMData(ADVMData):
         cell_size = self._configuration_parameters['Cell Size']
         number_of_cells = self._configuration_parameters['Number of Cells']
 
-        first_cell_mid_point = blanking_distance + cell_size / 2
+        first_cell_mid_point = blanking_distance + cell_size
         last_cell_mid_point = first_cell_mid_point + (number_of_cells - 1) * cell_size
 
         cell_range = np.linspace(first_cell_mid_point, last_cell_mid_point, num=number_of_cells)
