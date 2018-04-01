@@ -20,6 +20,13 @@ class TestNortekADVMDataInit(unittest.TestCase):
 
     advm_data = None
     data_set_path = None
+    expected_config_dict = None
+
+    def _test_config_parameters(self):
+        """Test the configuration parameters"""
+
+        result_config_dict = self.advm_data.get_configuration_parameters().get_dict()
+        self.assertEqual(result_config_dict, self.expected_config_dict)
 
     def _test_data(self):
         """Test the accuracy of the data set read by the read method"""
@@ -51,6 +58,20 @@ class TestAquadoppADVMDataInit(TestNortekADVMDataInit):
         self.data_set_path = os.path.join(aqd_data_path, test_data_set)
         self.advm_data = AquadoppADVMData.read_aquadopp_data(self.data_set_path)
 
+        self.expected_config_dict = {'Beam Orientation': 'Horizontal',
+                                     'Blanking Distance': 0.2,
+                                     'Cell Size': 0.2,
+                                     'Effective Transducer Diameter': 0.01395,
+                                     'Frequency': 2000.0,
+                                     'Instrument': 'AQD',
+                                     'Number of Beams': 2,
+                                     'Number of Cells': 50,
+                                     'Slant Angle': 25.0}
+
+    def test_aquadopp_config_parameters(self):
+        """Test the configuration parameters from reading the Aquadopp data"""
+        self._test_config_parameters()
+
     def test_aquadopp_data(self):
         """Test the accuracy of the reading of the Aquadopp data set"""
         self._test_data()
@@ -68,6 +89,20 @@ class TestEZQADVMDataInit(TestNortekADVMDataInit):
         test_data_set = 'EZQ'
         self.data_set_path = os.path.join(ezq_data_path, test_data_set)
         self.advm_data = EZQADVMData.read_ezq_data(self.data_set_path, cell_size=0.4)
+
+        self.expected_config_dict = {'Beam Orientation': 'Horizontal',
+                                     'Blanking Distance': 0.2,
+                                     'Cell Size': 0.4,
+                                     'Effective Transducer Diameter': 0.01395,
+                                     'Frequency': 1000.0,
+                                     'Instrument': 'EZQ',
+                                     'Number of Beams': 4,
+                                     'Number of Cells': 64,
+                                     'Slant Angle': 25.0}
+
+    def test_ezq_config_parameters(self):
+        """Test the configuration parameters from reading the EZQ data"""
+        self._test_config_parameters()
 
     def test_ezq_data(self):
         """Test the read_ezq_data method and compare the relevant acoustic data to the expected results"""
