@@ -12,11 +12,12 @@ class NortekADVMData(ADVMData):
     """Super class for Nortek instruments"""
 
     # Regex patterns for reading config parameters from HDR file
-    _cell_size_pattern = 'Cell size                             ([0-9]+([.][0-9]*)?|[.][0-9]+) cm'
     _frequency_pattern = 'Head frequency                        ([0-9]+([.][0-9]*)?|[.][0-9]+) kHz'
     _number_of_beams_pattern = 'Number of beams                       ([0-9]*)'
 
     # Regex patterns for reading config parameters. If applicable, they must be defined by subclasses
+    _cell_size_pattern = None
+    _blanking_distance_pattern = None
     _number_of_cells_pattern = None
 
     # Instrument type, must be defined in subclasses
@@ -79,12 +80,27 @@ class NortekADVMData(ADVMData):
         values = [frequency, 'Horizontal', nortek_slant_angle, number_of_beams,
                   cls._instrument, nortek_effective_transducer_diameter]
 
-        # try to get the number of cells from the HDR file.
-        # if it fails, the subclass must define the number of cells elsewhere
+        # try to get the number of cells, blanking distance, and cell size from the HDR file.
+        # if it fails, the subclass must define them elsewhere
+
+        try:
+            blanking_distance = float(cls._get_re_value(cls._blanking_distance_pattern, hdr_text))
+            keys.append('Blanking Distance')
+            values.append(blanking_distance)
+        except TypeError:
+            pass
+
         try:
             number_of_cells = int(cls._get_re_value(cls._number_of_cells_pattern, hdr_text))
             keys.append('Number of Cells')
             values.append(number_of_cells)
+        except TypeError:
+            pass
+
+        try:
+            cell_size = float(cls._get_re_value(cls._cell_size_pattern, hdr_text)) / 100
+            keys.append('Cell Size')
+            values.append(cell_size)
         except TypeError:
             pass
 
@@ -107,6 +123,8 @@ class EZQADVMData(NortekADVMData):
     def _get_blanking_distance(blanking_distance_series):
         """Gets the blanking distance from the pass Pandas Series.
 
+        Truncates blanking distance to the nearest cm
+
         Raises an ADVMDataReadError if there are more than one unique blanking distances
 
         :param blanking_distance_series: Series containing blanking distance
@@ -119,7 +137,10 @@ class EZQADVMData(NortekADVMData):
         if unique_blanking_distance.shape != (1,):
             raise ADVMDataReadError
 
-        return unique_blanking_distance[0]
+        # truncate to the nearest cm
+        blanking_distance = float('{:.2}'.format(unique_blanking_distance[0]))
+
+        return blanking_distance
 
     @staticmethod
     def _get_number_of_cells(data_df, number_of_beams):
@@ -278,6 +299,8 @@ class AquadoppADVMData(NortekADVMData):
     """Handles specifics for the Nortek Aquadopp instrument"""
 
     _instrument = 'AQD'
+    _cell_size_pattern = 'Cell size                             ([0-9]+([.][0-9]*)?|[.][0-9]+) cm'
+    _blanking_distance_pattern = 'Blanking distance                     ([0-9]+([.][0-9]*)?|[.][0-9]+) m'
     _number_of_cells_pattern = 'Number of cells                       ([0-9]*)'
 
     @classmethod
