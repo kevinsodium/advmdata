@@ -22,6 +22,22 @@ class TestNortekADVMDataInit(unittest.TestCase):
     data_set_path = None
     expected_config_dict = None
 
+    def _test_cell_range(self):
+        """Tests the calculation of the cell range"""
+        calculated_cell_range = self.advm_data.get_cell_range().mean()
+
+        # create a Series with the expected cell ranges
+        number_of_cells = self.expected_config_dict['Number of Cells']
+        blanking_distance = self.expected_config_dict['Blanking Distance']
+        cell_size = self.expected_config_dict['Cell Size']
+
+        cell_numbers = np.arange(1, number_of_cells + 1)
+        expected_cell_range_index = ['R{:03}'.format(cell) for cell in cell_numbers]
+        expected_cell_range_data = blanking_distance + cell_numbers * cell_size
+        expected_cell_range = pd.Series(data=expected_cell_range_data, index=expected_cell_range_index)
+
+        pd.testing.assert_series_equal(calculated_cell_range, expected_cell_range)
+
     def _test_config_parameters(self):
         """Test the configuration parameters"""
 
@@ -68,6 +84,10 @@ class TestAquadoppADVMDataInit(TestNortekADVMDataInit):
                                      'Number of Cells': 50,
                                      'Slant Angle': 25.0}
 
+    def test_aquadopp_cell_range(self):
+        """Test the calculation of the cell range for the Aquadopp"""
+        self._test_cell_range()
+
     def test_aquadopp_config_parameters(self):
         """Test the configuration parameters from reading the Aquadopp data"""
         self._test_config_parameters()
@@ -86,10 +106,6 @@ class TestEZQADVMDataInit(TestNortekADVMDataInit):
 
     def setUp(self):
         """Initialize an instance of EZQADVMData to test"""
-        test_data_set = 'EZQ'
-        self.data_set_path = os.path.join(ezq_data_path, test_data_set)
-        self.advm_data = EZQADVMData.read_ezq_data(self.data_set_path, cell_size=0.4)
-
         self.expected_config_dict = {'Beam Orientation': 'Horizontal',
                                      'Blanking Distance': 0.2,
                                      'Cell Size': 0.4,
@@ -99,6 +115,14 @@ class TestEZQADVMDataInit(TestNortekADVMDataInit):
                                      'Number of Beams': 4,
                                      'Number of Cells': 64,
                                      'Slant Angle': 25.0}
+
+        test_data_set = 'EZQ'
+        self.data_set_path = os.path.join(ezq_data_path, test_data_set)
+        self.advm_data = EZQADVMData.read_ezq_data(self.data_set_path, cell_size=self.expected_config_dict['Cell Size'])
+
+    def test_ezq_cell_range(self):
+        """Test the calculation of the cell range for the EZQ"""
+        self._test_cell_range()
 
     def test_ezq_config_parameters(self):
         """Test the configuration parameters from reading the EZQ data"""
