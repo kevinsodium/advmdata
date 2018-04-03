@@ -173,10 +173,15 @@ class ArgonautADVMData(ADVMData):
     def read_argonaut_data(cls, data_set_path):
         """Loads an Argonaut data set into an ADVMData class object.
 
-        The DAT, SNR, and CTL ASCII files that are exported (with headers) from ViewArgonaut must be present.
+        The DAT, SNR, VEL, and CTL ASCII files that are exported (with headers) from ViewArgonaut must be present.
 
-        :param data_directory: Full path to the Argonaut data files
-        :type data_directory: str
+        If SNR or VEL files aren't recognized, cell backscatter and velocity data are not read.
+
+        If a CTL file isn't present, configuration parameters are not created.
+
+        A DAT file must be present.
+
+        :param data_set_path: Full path to the Argonaut data files
         :return: ADVMData object containing the Argonaut data set information
         """
 
