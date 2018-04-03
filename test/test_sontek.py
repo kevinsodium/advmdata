@@ -3,6 +3,8 @@ import unittest
 
 import numpy as np
 
+import pandas as pd
+
 from advmdata.sontek import ArgonautADVMData, SL3GADVMData
 from test.test_core import TestADVMDataInit
 
@@ -19,7 +21,7 @@ sl3g_data_path = os.path.join(sontek_data_path, 'SL3G')
 
 
 class TestArgonautADVMDataInit(TestADVMDataInit):
-    """Test the successful initialization of the ArgonautADVMData class"""
+    """Test the initialization of the ArgonautADVMData class"""
 
     def setUp(self):
         """Initialize instance of ArgonautADVMData class"""
@@ -65,6 +67,45 @@ class TestArgonautADVMDataInit(TestADVMDataInit):
     def test_origin(self):
         """Test the creation of the Argonaut data origin"""
         self._test_origin()
+
+
+class TestArgonautADVMDataAddData(unittest.TestCase):
+    """Test adding ADVMData instances"""
+
+    def setUp(self):
+        """Initialize ADVMData instances"""
+
+        # load the first data set
+        data_set_1 = 'ARG1'
+        self.data_set_1_path = os.path.join(arg_data_path, data_set_1)
+        self.advm_data_1 = ArgonautADVMData.read_argonaut_data(self.data_set_1_path)
+
+        # load the second data set
+        data_set_2 = 'ARG2'
+        self.data_set_2_path = os.path.join(arg_data_path, data_set_2)
+        self.advm_data_2 = ArgonautADVMData.read_argonaut_data(self.data_set_2_path)
+
+    def test_add_data_compatible(self):
+        """Test the add_data method with compatible data sets with no overlapping observations."""
+
+        advm_data_add_result = self.advm_data_1.add_data(self.advm_data_2)
+
+        # test the resulting data of the add
+        result_data_df = advm_data_add_result.get_data()
+        expected_data_path = os.path.join(arg_data_path, 'Compatible add result data.txt')
+        expected_data_df = pd.read_table(expected_data_path, index_col=0, parse_dates=True)
+        pd.testing.assert_frame_equal(result_data_df, expected_data_df)
+
+        # test the resulting origin of the add
+        result_origin_df = advm_data_add_result.get_origin()
+        expected_origin_path = os.path.join(arg_data_path, 'Compatible add result origin.txt')
+        expected_origin_df = pd.read_table(expected_origin_path, index_col=0)
+        expected_instrument_type = 'SL'
+        origin_path_1 = self.data_set_1_path + " (" + expected_instrument_type + ")"
+        origin_path_2 = self.data_set_2_path + " (" + expected_instrument_type + ")"
+        expected_origin_df.replace(to_replace=['{origin path 1}', '{origin path 2}'],
+                                   value=[origin_path_1, origin_path_2], inplace=True)
+        pd.testing.assert_frame_equal(result_origin_df, expected_origin_df)
 
 
 if __name__ == '__main__':
