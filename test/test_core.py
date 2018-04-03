@@ -4,6 +4,8 @@ import unittest
 import numpy as np
 import pandas as pd
 
+from advmdata.core import ADVMDataIncompatibleError
+
 
 class TestADVMDataInit(unittest.TestCase):
 
@@ -57,3 +59,38 @@ class TestADVMDataInit(unittest.TestCase):
         expected_origin.replace(to_replace='{origin path}', value=self.data_set_path + data_path_suffix, inplace=True)
 
         pd.testing.assert_frame_equal(read_results_origin, expected_origin)
+
+
+class TestADVMDataAddData(unittest.TestCase):
+
+    read_data_method = None
+
+    def _test_add_data_compatible(self, data_set_1_path, data_set_2_path, expected_data_path, expected_origin_path):
+        """Test the add_data method with compatible data sets."""
+
+        advm_data_1 = self.read_data_method(data_set_1_path)
+        advm_data_2 = self.read_data_method(data_set_2_path)
+
+        advm_data_add_result = advm_data_1.add_data(advm_data_2)
+
+        # test the resulting data of the add
+        result_data_df = advm_data_add_result.get_data()
+        expected_data_df = pd.read_table(expected_data_path, index_col=0, parse_dates=True)
+        pd.testing.assert_frame_equal(result_data_df, expected_data_df)
+
+        # test the resulting origin of the add
+        result_origin_df = advm_data_add_result.get_origin()
+        expected_origin_df = pd.read_table(expected_origin_path, index_col=0)
+        result_configuration_parameters = advm_data_add_result.get_configuration_parameters()
+        expected_instrument_type = result_configuration_parameters['Instrument']
+        origin_path_1 = data_set_1_path + " (" + expected_instrument_type + ")"
+        origin_path_2 = data_set_2_path + " (" + expected_instrument_type + ")"
+        expected_origin_df.replace(to_replace=['{origin path 1}', '{origin path 2}'],
+                                   value=[origin_path_1, origin_path_2], inplace=True)
+        pd.testing.assert_frame_equal(result_origin_df, expected_origin_df)
+
+    def _test_add_data_incompatible(self, data_set_1_path, data_set_2_path):
+        """Test the add_data method with incompatible data sets."""
+        advm_data_1 = self.read_data_method(data_set_1_path)
+        advm_data_2 = self.read_data_method(data_set_2_path)
+        self.assertRaises(ADVMDataIncompatibleError, advm_data_1.add_data, advm_data_2)
