@@ -2,8 +2,6 @@ import abc
 import copy
 import re
 
-import numpy as np
-
 from linearmodel import datamanager
 
 
@@ -132,7 +130,8 @@ class ADVMConfigParam(ADVMParam):
                       'Blanking Distance', 'Cell Size', 'Number of Cells', 'Number of Beams', 'Instrument']
 
         # initial values for the configuration parameters
-        init_values = np.tile(np.nan, (len(valid_keys),))
+        # init_values = np.tile(None, (len(valid_keys),))
+        init_values = [None] * len(valid_keys)
 
         config_dict = dict(zip(valid_keys, init_values))
 
@@ -147,14 +146,10 @@ class ADVMConfigParam(ADVMParam):
 
         keys_to_check = ['Frequency', 'Slant Angle', 'Blanking Distance', 'Cell Size', 'Number of Cells']
 
-        compatible_configs = True
+        self_compare_dict = {key: self[key] for key in keys_to_check}
+        other_compare_dict = {key: other[key] for key in keys_to_check}
 
-        for key in keys_to_check:
-            if not self[key] == other[key]:
-                compatible_configs = False
-                break
-
-        return compatible_configs
+        return self_compare_dict == other_compare_dict
 
     def _check_value(self, key, value):
         """Check if the provided value is valid for the given key. Raise an exception if not.
