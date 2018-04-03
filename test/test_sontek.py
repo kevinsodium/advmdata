@@ -3,10 +3,9 @@ import unittest
 
 import numpy as np
 
-import pandas as pd
+from advmdata.sontek import ArgonautADVMData
 
-from advmdata.sontek import ArgonautADVMData, SL3GADVMData
-from test.test_core import TestADVMDataInit
+from test.test_core import TestADVMDataInit, TestADVMDataAddData
 
 current_path = os.path.dirname(os.path.realpath(__file__))
 
@@ -69,43 +68,44 @@ class TestArgonautADVMDataInit(TestADVMDataInit):
         self._test_origin()
 
 
-class TestArgonautADVMDataAddData(unittest.TestCase):
+class TestArgonautADVMDataAddData(TestADVMDataAddData):
     """Test adding ADVMData instances"""
 
-    def setUp(self):
-        """Initialize ADVMData instances"""
+    read_data_method = ArgonautADVMData.read_argonaut_data
 
-        # load the first data set
+    def setUp(self):
+        """Define data set paths"""
+
+        # data sets 1 and 2 are compatible and complete (VEL, DAT, SNR, CTL)
         data_set_1 = 'ARG1'
         self.data_set_1_path = os.path.join(arg_data_path, data_set_1)
-        self.advm_data_1 = ArgonautADVMData.read_argonaut_data(self.data_set_1_path)
-
-        # load the second data set
         data_set_2 = 'ARG2'
         self.data_set_2_path = os.path.join(arg_data_path, data_set_2)
-        self.advm_data_2 = ArgonautADVMData.read_argonaut_data(self.data_set_2_path)
+
+        # data sets 3 and 4 are compatible and incomplete (DAT, VEL only)
+        data_set_3 = 'ARG3'
+        self.data_set_3_path = os.path.join(arg_data_path, data_set_3)
+        data_set_4 = 'ARG4'
+        self.data_set_4_path = os.path.join(arg_data_path, data_set_4)
 
     def test_add_data_compatible(self):
-        """Test the add_data method with compatible data sets with no overlapping observations."""
+        """Test Argonaut.add_data() with compatible data sets."""
 
-        advm_data_add_result = self.advm_data_1.add_data(self.advm_data_2)
+        # first test. "complete" data set
+        expected_data_path_1 = os.path.join(arg_data_path, 'Compatible add test 1 result data.txt')
+        expected_origin_path_1 = os.path.join(arg_data_path, 'Compatible add test 1 result origin.txt')
+        self._test_add_data_compatible(self.data_set_1_path, self.data_set_2_path,
+                                       expected_data_path_1, expected_origin_path_1)
 
-        # test the resulting data of the add
-        result_data_df = advm_data_add_result.get_data()
-        expected_data_path = os.path.join(arg_data_path, 'Compatible add result data.txt')
-        expected_data_df = pd.read_table(expected_data_path, index_col=0, parse_dates=True)
-        pd.testing.assert_frame_equal(result_data_df, expected_data_df)
+        # second test. incomplete data set. configuration parameters are not loaded from a CTL file
+        expected_data_path_2 = os.path.join(arg_data_path, 'Compatible add test 2 result data.txt')
+        expected_origin_path_2 = os.path.join(arg_data_path, 'Compatible add test 2 result origin.txt')
+        self._test_add_data_compatible(self.data_set_3_path, self.data_set_4_path,
+                                       expected_data_path_2, expected_origin_path_2)
 
-        # test the resulting origin of the add
-        result_origin_df = advm_data_add_result.get_origin()
-        expected_origin_path = os.path.join(arg_data_path, 'Compatible add result origin.txt')
-        expected_origin_df = pd.read_table(expected_origin_path, index_col=0)
-        expected_instrument_type = 'SL'
-        origin_path_1 = self.data_set_1_path + " (" + expected_instrument_type + ")"
-        origin_path_2 = self.data_set_2_path + " (" + expected_instrument_type + ")"
-        expected_origin_df.replace(to_replace=['{origin path 1}', '{origin path 2}'],
-                                   value=[origin_path_1, origin_path_2], inplace=True)
-        pd.testing.assert_frame_equal(result_origin_df, expected_origin_df)
+    def test_add_data_incompatible(self):
+        """Test ADVMData.add_data() with incompatible data sets."""
+        self._test_add_data_incompatible(self.data_set_1_path, self.data_set_3_path)
 
 
 if __name__ == '__main__':
