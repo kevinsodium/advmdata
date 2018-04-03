@@ -209,13 +209,14 @@ class ArgonautADVMData(ADVMData):
             config_dict = cls._read_argonaut_ctl_file(arg_ctl_file)
             configuration_parameters.update(config_dict)
         except FileNotFoundError:
-            pass
+            configuration_parameters['Instrument'] = 'Arg'
 
         # Combine the '.snr' and '.dat.' DataFrames into a single acoustic DataFrame, make the timestamp
         # the index, and return an ADVMData object
         acoustic_df = pd.concat([dat_df, snr_df, vel_df], axis=1)
 
         data_set_suffix = " (" + configuration_parameters['Instrument'] + ")"
+
         data_origin = datamanager.DataManager.create_data_origin(acoustic_df, data_set_path + data_set_suffix)
 
         data_manager = datamanager.DataManager(acoustic_df, data_origin)
