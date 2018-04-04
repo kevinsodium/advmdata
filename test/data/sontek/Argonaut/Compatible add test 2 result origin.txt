@@ -1,25 +1,25 @@
 	variable	origin
-0	VelocityX	D:\py\advmdata\test\data\sontek\Argonaut\ARG3 (Arg)
-1	VelocityY	D:\py\advmdata\test\data\sontek\Argonaut\ARG3 (Arg)
-2	Vbeam	D:\py\advmdata\test\data\sontek\Argonaut\ARG3 (Arg)
-3	Temp	D:\py\advmdata\test\data\sontek\Argonaut\ARG3 (Arg)
-4	Cell01Vx	D:\py\advmdata\test\data\sontek\Argonaut\ARG3 (Arg)
-5	Cell01Vy	D:\py\advmdata\test\data\sontek\Argonaut\ARG3 (Arg)
-6	Cell02Vx	D:\py\advmdata\test\data\sontek\Argonaut\ARG3 (Arg)
-7	Cell02Vy	D:\py\advmdata\test\data\sontek\Argonaut\ARG3 (Arg)
-8	Cell03Vx	D:\py\advmdata\test\data\sontek\Argonaut\ARG3 (Arg)
-9	Cell03Vy	D:\py\advmdata\test\data\sontek\Argonaut\ARG3 (Arg)
-10	Cell04Vx	D:\py\advmdata\test\data\sontek\Argonaut\ARG3 (Arg)
-11	Cell04Vy	D:\py\advmdata\test\data\sontek\Argonaut\ARG3 (Arg)
-12	VelocityX	D:\py\advmdata\test\data\sontek\Argonaut\ARG4 (Arg)
-13	VelocityY	D:\py\advmdata\test\data\sontek\Argonaut\ARG4 (Arg)
-14	Vbeam	D:\py\advmdata\test\data\sontek\Argonaut\ARG4 (Arg)
-15	Temp	D:\py\advmdata\test\data\sontek\Argonaut\ARG4 (Arg)
-16	Cell01Vx	D:\py\advmdata\test\data\sontek\Argonaut\ARG4 (Arg)
-17	Cell01Vy	D:\py\advmdata\test\data\sontek\Argonaut\ARG4 (Arg)
-18	Cell02Vx	D:\py\advmdata\test\data\sontek\Argonaut\ARG4 (Arg)
-19	Cell02Vy	D:\py\advmdata\test\data\sontek\Argonaut\ARG4 (Arg)
-20	Cell03Vx	D:\py\advmdata\test\data\sontek\Argonaut\ARG4 (Arg)
-21	Cell03Vy	D:\py\advmdata\test\data\sontek\Argonaut\ARG4 (Arg)
-22	Cell04Vx	D:\py\advmdata\test\data\sontek\Argonaut\ARG4 (Arg)
-23	Cell04Vy	D:\py\advmdata\test\data\sontek\Argonaut\ARG4 (Arg)
+0	VelocityX	{origin path 1}
+1	VelocityY	{origin path 1}
+2	Vbeam	{origin path 1}
+3	Temp	{origin path 1}
+4	Cell01Vx	{origin path 1}
+5	Cell01Vy	{origin path 1}
+6	Cell02Vx	{origin path 1}
+7	Cell02Vy	{origin path 1}
+8	Cell03Vx	{origin path 1}
+9	Cell03Vy	{origin path 1}
+10	Cell04Vx	{origin path 1}
+11	Cell04Vy	{origin path 1}
+12	VelocityX	{origin path 2}
+13	VelocityY	{origin path 2}
+14	Vbeam	{origin path 2}
+15	Temp	{origin path 2}
+16	Cell01Vx	{origin path 2}
+17	Cell01Vy	{origin path 2}
+18	Cell02Vx	{origin path 2}
+19	Cell02Vy	{origin path 2}
+20	Cell03Vx	{origin path 2}
+21	Cell03Vy	{origin path 2}
+22	Cell04Vx	{origin path 2}
+23	Cell04Vy	{origin path 2}
