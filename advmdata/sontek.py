@@ -282,20 +282,25 @@ class SL3GADVMData(ADVMData):
 
         # Determine the instrument type
         instrument_type = mat_file['System_Id'][0, 0]['InstrumentType']
+        #  The SL MAT file indicates it's an IQ.
+        # TODO: Figure out how to accurately get frequency and instrument type from MAT file
         if 'IQ' in instrument_type[0]:
-            config_dict['Instrument'] = "IQ"
+            # config_dict['Instrument'] = "IQ"
+            # config_dict['Beam Orientation'] = 'Vertical'
+            # config_dict['Frequency'] = 3000.
+            pass
         else:
-            config_dict['Instrument'] = "SL"
+            # config_dict['Instrument'] = "SL"
+            # config_dict['Beam Orientation'] = 'Horizontal'
+            # config_dict['Frequency'] = 1500.
+            pass
 
-        # Match instrument type to Frequency
-        if config_dict['Instrument'] == "IQ":
-            config_dict['Frequency'] = 3000
-        # Determine Frequency
-        else:
-            config_dict['Frequency'] = 3000
+        config_dict['Instrument'] = 'SL3G'
+        config_dict['Frequency'] = 1500.
+        config_dict['Beam Orientation'] = 'Horizontal'
 
         # Default Slant Angle
-        config_dict['Slant Angle'] = 25
+        config_dict['Slant Angle'] = 25.
 
         # Default Number of Beams
         config_dict['Number of Beams'] = int(2)
@@ -349,8 +354,8 @@ class SL3GADVMData(ADVMData):
         """
 
         # Beam AMP data
-        beam_one_amp = mat_file['Profile_0_Amp']
-        beam_two_amp = mat_file['Profile_1_Amp']
+        beam_one_amp = mat_file['Profile_0_Amp'].astype('int64')
+        beam_two_amp = mat_file['Profile_1_Amp'].astype('int64')
 
         assert beam_one_amp.shape == beam_two_amp.shape
 
@@ -433,7 +438,8 @@ class SL3GADVMData(ADVMData):
         acoustic_df.set_index(datetime_index, inplace=True)
 
         # create a data manager from the acoustic data
-        data_origin = datamanager.DataManager.create_data_origin(acoustic_df, mat_file_path + "(SL3G)")
+        data_set_suffix = " (" + configuration_parameters['Instrument'] + ")"
+        data_origin = datamanager.DataManager.create_data_origin(acoustic_df, mat_file_path + data_set_suffix)
         data_manager = datamanager.DataManager(acoustic_df, data_origin)
 
         return cls(data_manager, configuration_parameters)
