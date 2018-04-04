@@ -3,7 +3,7 @@ import unittest
 
 import numpy as np
 
-from advmdata.sontek import ArgonautADVMData
+from advmdata.sontek import ArgonautADVMData, SL3GADVMData
 
 from test.test_core import TestADVMDataInit, TestADVMDataAddData
 
@@ -65,6 +65,63 @@ class TestArgonautADVMDataInit(TestADVMDataInit):
 
     def test_origin(self):
         """Test the creation of the Argonaut data origin"""
+        self._test_origin()
+
+
+class TestSL3GADVMDataInit(TestADVMDataInit):
+    """Test the initialization of the SL3GADVMData class"""
+
+    def setUp(self):
+        """Initialize instance of SL3GADVMData class"""
+
+        test_data_set = 'SL3G1.mat'
+        self.data_set_path = os.path.join(sl3g_data_path, test_data_set)
+        self.advm_data = SL3GADVMData.read_sl3g_mat(self.data_set_path)
+
+        self.expected_config_dict = {'Beam Orientation': 'Horizontal',
+                                     'Blanking Distance': 0.2,
+                                     'Cell Size': 0.2,
+                                     'Effective Transducer Diameter': None,
+                                     'Frequency': 1500.0,
+                                     'Instrument': 'SL3G',
+                                     'Number of Beams': 2,
+                                     'Number of Cells': 68,
+                                     'Slant Angle': 25.0}
+
+    def _get_expected_cell_range_data(self):
+        """Calculate the cell range expected for the Argonaut instrument"""
+
+        number_of_cells = self.expected_config_dict['Number of Cells']
+        blanking_distance = self.expected_config_dict['Blanking Distance']
+        cell_size = self.expected_config_dict['Cell Size']
+
+        cell_numbers = np.arange(0, number_of_cells)
+        expected_cell_range_data = blanking_distance + 1.5* cell_size + (cell_numbers * cell_size)
+
+        return expected_cell_range_data
+
+    def test_sl3g_cell_range(self):
+        """Test the calculate the cell range for the SL3G"""
+        self._test_cell_range()
+
+    def test_sl3g_config_parameters(self):
+        """Test the configuration parameters from reading the SL3G data"""
+        self._test_config_parameters()
+
+    def test_sl3g_data(self):
+        """Test the accuracy of the reading of the SL3G data set"""
+        # read_results_df = self.advm_data.get_data()
+
+        # results_path = self.data_set_path + '_results.txt'
+        # read_results_df.to_csv(results_path, sep='\t')
+        self._test_data()
+
+    def test_sl3g_origin(self):
+        """Test the creation of the SL3G data origin"""
+        # read_results_origin = self.advm_data.get_origin()
+
+        # expected_origin_path = self.data_set_path + '_expected_origin.txt'
+        # read_results_origin.to_csv(expected_origin_path, sep='\t')
         self._test_origin()
 
 
