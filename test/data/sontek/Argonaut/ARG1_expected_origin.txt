@@ -63,3 +63,6 @@
 61	Cell09Vy	{origin path}
 62	Cell10Vx	{origin path}
 63	Cell10Vy	{origin path}
+64	Noise1	{origin path}
+65	Noise2	{origin path}
+66	Noise3	{origin path}
