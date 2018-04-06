@@ -121,7 +121,7 @@ class ArgonautADVMData(ADVMData):
         dat_df.set_index(datetime_index, inplace=True)
 
         # remove non-relevant columns
-        relevant_columns = ['Temp', 'Vbeam', 'Velocity(X|Y)']
+        relevant_columns = ['Temp', 'Vbeam', 'Velocity(X|Y)', 'Noise(1|2|3)']
         dat_df = dat_df.filter(regex=r'(' + '|'.join(relevant_columns) + r')$')
 
         dat_df = dat_df.apply(pd.to_numeric, args=('coerce', ))
