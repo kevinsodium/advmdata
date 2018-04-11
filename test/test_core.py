@@ -77,7 +77,9 @@ class TestADVMDataAddData(unittest.TestCase):
 
         # test the resulting data of the add
         result_data_df = advm_data_add_result.get_data()
+        result_data_df.sort_index(axis=1, inplace=True)
         expected_data_df = pd.read_table(expected_data_path, index_col=0, parse_dates=True)
+        expected_data_df.sort_index(axis=1, inplace=True)
         pd.testing.assert_frame_equal(result_data_df, expected_data_df)
 
         # test the resulting origin of the add
