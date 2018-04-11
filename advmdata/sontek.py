@@ -340,7 +340,7 @@ class SL3GADVMData(ADVMData):
         v_beam = v_beam.flatten()
 
         # Create a DataFrame from variables above with 'index=timestamp'
-        dat_df = pd.DataFrame({'Temp': temperature, 'Vbeam': v_beam})
+        dat_df = pd.DataFrame({'Temp': temperature, 'Vbeam': v_beam}, dtype=np.float64)
 
         return dat_df
 
@@ -366,7 +366,7 @@ class SL3GADVMData(ADVMData):
                         for cell in range(1, number_of_cells+1)]
 
         # Create DataFrames for both beams
-        amp_df = pd.DataFrame(data=amp_data, columns=column_names)
+        amp_df = pd.DataFrame(data=amp_data, columns=column_names, dtype=np.float64)
 
         return amp_df
 
@@ -406,7 +406,7 @@ class SL3GADVMData(ADVMData):
         velocity_data = np.hstack([xy_velocity[i, :, :] for i in range(xy_velocity.shape[0])])
         column_names = ['Cell{0:02}V{1}'.format(cell, direction) for direction in ['x', 'y']
                         for cell in range(1, number_of_cells + 1)]
-        vel_df = pd.DataFrame(data=velocity_data, columns=column_names)
+        vel_df = pd.DataFrame(data=velocity_data, columns=column_names, dtype=np.float64)
 
         return vel_df
 

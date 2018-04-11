@@ -43,9 +43,9 @@ class TestADVMDataInit(unittest.TestCase):
         read_results_df = self.advm_data.get_data()
 
         results_path = self.data_set_path + '_results.txt'
-        expected_results_df = pd.read_table(results_path, index_col='DateTime', parse_dates=True)
+        expected_results_df = pd.read_table(results_path, index_col='DateTime', parse_dates=True, dtype=np.float64)
 
-        pd.testing.assert_frame_equal(read_results_df, expected_results_df)
+        pd.testing.assert_frame_equal(read_results_df, expected_results_df.astype(float))
 
     def _test_origin(self):
 
@@ -74,9 +74,9 @@ class TestADVMDataAddData(unittest.TestCase):
         advm_data_add_result = advm_data_1.add_data(advm_data_2)
 
         # test the resulting data of the add
-        result_data_df = advm_data_add_result.get_data()
+        result_data_df = advm_data_add_result.get_data().astype(float)
         expected_data_df = pd.read_table(expected_data_path, index_col=0, parse_dates=True)
-        pd.testing.assert_frame_equal(result_data_df, expected_data_df)
+        pd.testing.assert_frame_equal(result_data_df, expected_data_df.astype(float))
 
         # test the resulting origin of the add
         result_origin_df = advm_data_add_result.get_origin()
