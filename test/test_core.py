@@ -41,9 +41,11 @@ class TestADVMDataInit(unittest.TestCase):
         """Test the accuracy of the data set read by the read method"""
 
         read_results_df = self.advm_data.get_data()
+        read_results_df.sort_index(axis=1, inplace=True)
 
         results_path = self.data_set_path + '_results.txt'
         expected_results_df = pd.read_table(results_path, index_col='DateTime', parse_dates=True)
+        expected_results_df.sort_index(axis=1, inplace=True)
 
         pd.testing.assert_frame_equal(read_results_df, expected_results_df)
 
